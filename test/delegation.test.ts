@@ -4,7 +4,7 @@ import type { Server } from "bun";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AdvisorConfig, AutoAskRule } from "../src/config.ts";
+import { DEFAULT_CONFIG, type AdvisorConfig, type AutoAskRule } from "../src/config.ts";
 import { migrate } from "../src/db/db.ts";
 import { Engine, type Clock, type HubEvent, type SessionRow } from "../src/hub/engine.ts";
 import { startServer } from "../src/hub/server.ts";
@@ -25,7 +25,7 @@ function newEngine(config: { advisors: AdvisorConfig[]; autoAsk?: AutoAskRule[] 
   const db = new Database(":memory:", { strict: true });
   migrate(db);
   const clock = new FakeClock();
-  const engine = new Engine(db, "http://127.0.0.1:4747", clock, { advisors: config.advisors, autoAsk: config.autoAsk ?? [] });
+  const engine = new Engine(db, "http://127.0.0.1:4747", clock, { ...DEFAULT_CONFIG, advisors: config.advisors, autoAsk: config.autoAsk ?? [] });
   return { engine, db, clock };
 }
 
@@ -321,7 +321,7 @@ describe("no loops: an Advisor process cannot ask the Human (delegation spec)", 
       migrate(db);
       const port = freePort();
       const url = `http://127.0.0.1:${port}`;
-      const engine = new Engine(db, url, undefined, { advisors: [advisor], autoAsk: [] });
+      const engine = new Engine(db, url, undefined, { ...DEFAULT_CONFIG, advisors: [advisor], autoAsk: [] });
       server = await startServer(engine, port);
 
       const s = session(engine, "selfcheck-session");

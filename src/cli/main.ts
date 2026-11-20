@@ -1,9 +1,13 @@
 #!/usr/bin/env bun
+import { existsSync } from "node:fs";
 import { parseArgs, type ParseArgsOptionsConfig } from "node:util";
+import { loadConfigDetailed } from "../config.ts";
 import { DowngradeError, migrate, openDb } from "../db/db.ts";
 import { exitCodeFor, HubError } from "../errors.ts";
+import { backupNow, manualBackupPath, restoreBackup } from "../hub/backup.ts";
 import { runHub } from "../hub/run.ts";
-import { dbPath } from "../paths.ts";
+import { runningHub } from "../hub/lock.ts";
+import { backupsDir, configPath, dbPath, hubLockPath } from "../paths.ts";
 import type { Answer } from "../schema/types.ts";
 import { HubClient } from "./client.ts";
 import { hubUrl } from "./discovery.ts";
@@ -11,6 +15,9 @@ import { hubUrl } from "./discovery.ts";
 const USAGE = `usage:
   hermes migrate                 create or upgrade the database
   hermes hub                     start the Hub
+  hermes config                  print the effective settings and their source
+  hermes backup [path]           take a backup now (default: .hermes/backups/hub-manual-<timestamp>.db)
+  hermes restore <backup>        restore the database from a backup (the Hub must not be running)
   hermes ask <file|-> [--no-wait] [--out <file>] [--supersedes <round-id>] [identity]
   hermes wait <round-id> [--out <file>] [identity]
   hermes cancel <round-id> [identity]
@@ -124,6 +131,62 @@ function runMigrate(): number {
   }
 }
 
+function runConfig(): number {
+  let loaded;
+  try {
+    loaded = loadConfigDetailed(configPath());
+  } catch (err) {
+    console.error(`hermes config: ${err instanceof Error ? err.message : String(err)}`);
+    return 1;
+  }
+  const { config, sources } = loaded;
+  console.log(
+    [
+      `port = ${config.port} (${sources.port})`,
+      `log_level = ${config.log_level} (${sources.log_level})`,
+      `limits.attachment_bytes = ${config.limits.attachment_bytes} (${sources.limits.attachment_bytes})`,
+      `limits.round_bytes = ${config.limits.round_bytes} (${sources.limits.round_bytes})`,
+      `limits.pending_per_session = ${config.limits.pending_per_session} (${sources.limits.pending_per_session})`,
+      `limits.live_ms = ${config.limits.live_ms} (${sources.limits.live_ms})`,
+      `limits.idle_ms = ${config.limits.idle_ms} (${sources.limits.idle_ms})`,
+      `backups.keep = ${config.backups.keep} (${sources.backups.keep})`,
+      `advisor = [${config.advisors.map((a) => a.name).join(", ")}] (${sources.advisors})`,
+      `auto_ask = ${config.autoAsk.length} rule(s) (${sources.autoAsk})`,
+    ].join("\n"),
+  );
+  return 0;
+}
+
+function runBackup(args: string[]): number {
+  const { positionals } = parseArgs({ args, options: {}, allowPositionals: true, strict: true });
+  if (positionals.length > 1) throw new UsageError("hermes backup takes at most one path argument");
+  const dest = positionals[0] ?? manualBackupPath(backupsDir());
+  const db = openDb(dbPath());
+  try {
+    backupNow(db, dest);
+  } finally {
+    db.close();
+  }
+  console.log(`backed up to ${dest}`);
+  return 0;
+}
+
+function runRestore(args: string[]): number {
+  const { positionals } = parseArgs({ args, options: {}, allowPositionals: true, strict: true });
+  if (positionals.length !== 1) throw new UsageError("hermes restore needs exactly one argument: the backup path");
+  const backup = positionals[0]!;
+  if (!existsSync(backup)) throw new UsageError(`no such backup: ${backup}`);
+  const holder = runningHub(hubLockPath());
+  if (holder) {
+    console.error(`hermes restore: a Hub is running at ${holder.url} (pid ${holder.pid}); stop it first`);
+    return 1;
+  }
+  const aside = restoreBackup(openDb, dbPath(), backup);
+  console.log(`current database saved to ${aside}`);
+  console.log(`restored from ${backup}`);
+  return 0;
+}
+
 async function main(argv: string[]): Promise<number | undefined> {
   const [command, ...rest] = argv;
   try {
@@ -132,6 +195,12 @@ async function main(argv: string[]): Promise<number | undefined> {
         return runMigrate();
       case "hub":
         return await runHub();
+      case "config":
+        return runConfig();
+      case "backup":
+        return runBackup(rest);
+      case "restore":
+        return runRestore(rest);
       case "ask":
         return await ask(rest);
       case "wait":
