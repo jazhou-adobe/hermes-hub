@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { statSync } from "node:fs";
 import { HubError } from "../errors.ts";
 import { canonicalJson, effectivePolicy, hubChecks, LIMITS, oversizedAttachment } from "../schema/checks.ts";
 import type { Answer, Outcome, PendingStatus, QuestionValue, Round } from "../schema/types.ts";
@@ -15,7 +16,7 @@ import {
 } from "../schema/validate.ts";
 import { VERSION } from "../version.ts";
 import { answerQuestions, lockValue, parseHumanValue, type Locks } from "./answers.ts";
-import { callsign } from "./callsign.ts";
+import { callsign, project } from "./callsign.ts";
 
 export interface SessionRow {
   id: string;
@@ -67,6 +68,40 @@ export type HubEvent =
   | { type: "round.superseded"; replaces: string; view: FeedRoundView }
   | { type: "round.removed"; round_id: string }
   | { type: "draft.saved"; round_id: string; draft: Draft };
+
+/** Filters for the answered log; present fields combine with AND (answered-log spec). */
+export interface LogFilter {
+  outcome?: Outcome;
+  session_id?: string;
+  callsign?: string;
+  project?: string;
+  /** `decided_at >= from` */
+  from?: string;
+  /** `decided_at <= to` */
+  to?: string;
+  /** Free-text query over `log_fts`. */
+  q?: string;
+  limit?: number;
+}
+
+export interface LogMeta {
+  round_id: string;
+  callsign: string;
+  project: string | null;
+  received_at: string;
+  delivered_at: string | null;
+  superseded_by?: string;
+}
+
+/** One ended Round as the answered log shows it: `{round, answer, meta}` plus the Draft snapshot
+ * and, for a free-text search, the matched snippet with `<mark>` highlights. */
+export interface LogEntry {
+  round: Round;
+  answer: Answer;
+  meta: LogMeta;
+  draft: Draft | null;
+  snippet?: string;
+}
 
 export interface Clock {
   now(): number;
@@ -393,6 +428,73 @@ export class Engine {
     this.emit([{ type: "round.removed", round_id: id }]);
   }
 
+  // ── Answered log (Command Center) ────────────────────────────────────────
+
+  /** The answered log: every ended Round, newest first, with the filters combined by AND. */
+  log(filter: LogFilter = {}): LogEntry[] {
+    const clauses: string[] = ["r.status <> 'pending'"];
+    const params: string[] = [];
+    if (filter.outcome !== undefined) {
+      clauses.push("r.status = ?");
+      params.push(filter.outcome);
+    }
+    if (filter.session_id !== undefined) {
+      clauses.push("r.session_id = ?");
+      params.push(filter.session_id);
+    }
+    if (filter.project !== undefined) {
+      clauses.push("coalesce(json_extract(s.git, '$.root'), s.cwd) = ?");
+      params.push(filter.project);
+    }
+    if (filter.from !== undefined) {
+      clauses.push("r.decided_at >= ?");
+      params.push(filter.from);
+    }
+    if (filter.to !== undefined) {
+      clauses.push("r.decided_at <= ?");
+      params.push(filter.to);
+    }
+
+    type LogRow = RoundRow & { kind: string; session_key: string; label: string | null; cwd: string | null; git: string | null; snippet: string | null };
+    let rows: LogRow[];
+    if (filter.q !== undefined) {
+      clauses.push("log_fts MATCH ?");
+      params.push(filter.q);
+      rows = this.db
+        .query<LogRow, string[]>(
+          `SELECT r.*, s.kind, s.session_key, s.label, s.cwd, s.git, snippet(log_fts, 1, '<mark>', '</mark>', '…', 16) AS snippet
+           FROM rounds r JOIN sessions s ON s.id = r.session_id JOIN log_fts ON log_fts.round_id = r.id
+           WHERE ${clauses.join(" AND ")} ORDER BY bm25(log_fts)`,
+        )
+        .all(...params);
+    } else {
+      rows = this.db
+        .query<LogRow, string[]>(
+          `SELECT r.*, s.kind, s.session_key, s.label, s.cwd, s.git, NULL AS snippet
+           FROM rounds r JOIN sessions s ON s.id = r.session_id
+           WHERE ${clauses.join(" AND ")} ORDER BY r.decided_at DESC, r.rowid DESC`,
+        )
+        .all(...params);
+    }
+    let entries = rows.map((r) => this.toLogEntry(r));
+    if (filter.callsign !== undefined) entries = entries.filter((e) => e.meta.callsign === filter.callsign);
+    return filter.limit !== undefined ? entries.slice(0, filter.limit) : entries;
+  }
+
+  /** The filtered log as `{round, answer, meta}` documents, for Export JSON. */
+  exportLog(filter: LogFilter = {}): { round: Round; answer: Answer; meta: LogMeta }[] {
+    return this.log(filter).map(({ round, answer, meta }) => ({ round, answer, meta }));
+  }
+
+  /** The database file's size on disk, for Settings → Storage. 0 for an in-memory database. */
+  dbSizeBytes(): number {
+    try {
+      return statSync(this.db.filename).size;
+    } catch {
+      return 0;
+    }
+  }
+
   // ── Policies ────────────────────────────────────────────────────────────
 
   /**
@@ -512,6 +614,7 @@ export class Engine {
       .query("UPDATE rounds SET status = ?, answer = ?, decided_at = ?, feed_removed_at = ? WHERE id = ? AND status = 'pending'")
       .run(outcome, JSON.stringify(answer), decided_at, removed, row.id);
     this.db.query("DELETE FROM question_deadlines WHERE round_id = ?").run(row.id);
+    this.db.query("INSERT INTO log_fts (round_id, text) VALUES (?, ?)").run(row.id, logSearchText(round, answer));
     return { type: "round.ended", round_id: row.id, answer, view: removed ? null : this.view(row.id) };
   }
 
@@ -538,6 +641,24 @@ export class Engine {
       answer: r.answer ? JSON.parse(r.answer) : null,
     };
   }
+
+  private toLogEntry(r: RoundRow & { kind: string; session_key: string; label: string | null; cwd: string | null; git: string | null; snippet: string | null }): LogEntry {
+    const answer: Answer = JSON.parse(r.answer!);
+    return {
+      round: JSON.parse(r.round),
+      answer,
+      draft: parseDraft(r.draft),
+      meta: {
+        round_id: r.id,
+        callsign: callsign(r),
+        project: project(r),
+        received_at: r.received_at,
+        delivered_at: r.delivered_at,
+        ...(answer.superseded_by !== undefined ? { superseded_by: answer.superseded_by } : {}),
+      },
+      ...(r.snippet !== null ? { snippet: r.snippet } : {}),
+    };
+  }
 }
 
 function parseDraft(text: string | null): Draft | null {
@@ -552,4 +673,46 @@ function carryDraft(oldRound: Round, draft: Draft | null, next: Round): Draft | 
     next.questions.filter((q) => oldKinds.get(q.id) === q.kind && draft.questions![q.id]).map((q) => [q.id, draft.questions![q.id]!]),
   );
   return Object.keys(questions).length ? { questions } : null;
+}
+
+/** Builds the free-text index for a Round once it ends (answered-log spec): title, context, each
+ * Question's prompt/detail, option labels/details, free-text answers, the Human's notes and the
+ * redirect message. Attachments are never indexed. */
+function logSearchText(round: Round, answer: Answer): string {
+  const parts: string[] = [round.title];
+  if (round.context) parts.push(round.context);
+  for (const q of round.questions) {
+    parts.push(q.prompt);
+    if (q.detail) parts.push(q.detail);
+    if (q.kind === "single" || q.kind === "multi") {
+      for (const o of q.options) {
+        parts.push(o.label);
+        if (o.detail) parts.push(o.detail);
+      }
+    }
+    const qa = answer.questions[q.id];
+    if (!qa) continue;
+    if (qa.note) parts.push(qa.note);
+    const v = qa.value;
+    if (!v) continue;
+    if ("text" in v) {
+      parts.push(v.text);
+    } else if ("selected" in v) {
+      if (q.kind === "single" && typeof v.selected === "string") {
+        const opt = q.options.find((o) => o.id === v.selected);
+        if (opt) parts.push(opt.label);
+      } else if (q.kind === "multi" && Array.isArray(v.selected)) {
+        for (const id of v.selected) {
+          const opt = q.options.find((o) => o.id === id);
+          if (opt) parts.push(opt.label);
+        }
+      }
+      if ("other" in v && v.other) parts.push(v.other);
+    } else if ("other" in v) {
+      parts.push(v.other);
+    }
+  }
+  if (answer.note) parts.push(answer.note);
+  if (answer.message) parts.push(answer.message);
+  return parts.join("\n");
 }

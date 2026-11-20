@@ -127,3 +127,55 @@ fieldset.locked {
   font-size: 0.85rem;
   font-style: italic;
 }
+.nav {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.nav a[aria-current="page"] {
+  font-weight: 600;
+  text-decoration: none;
+}
+.db-size {
+  opacity: 0.7;
+  font-size: 0.9rem;
+}
+.filters {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.chip-row button[aria-pressed="true"] {
+  outline: 2px solid currentColor;
+}
+.date-range {
+  display: flex;
+  gap: 1rem;
+}
+.export {
+  justify-self: start;
+}
+.day-heading {
+  font-size: 1rem;
+  opacity: 0.8;
+  margin: 1.5rem 0 0.5rem;
+}
+.snippet {
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+.snippet mark {
+  background: color-mix(in srgb, yellow 55%, transparent);
+}
+.question-answer {
+  margin-block: 0.4rem;
+}
+.setter {
+  opacity: 0.7;
+  font-size: 0.85rem;
+}

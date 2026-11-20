@@ -2,7 +2,7 @@
 
 A local human-in-the-loop Command Center. AI Agents on your Mac (Claude Code, Codex, Cursor, VS Code Copilot, omp, scripts) send **Rounds** of **Questions** to the **Hub**. One **Human** answers them all from a single **Command Center** in the browser, and each Answer flows back to the Agent that asked.
 
-**Status: Phase 1 in progress.** All Question kinds, Locks, Drafts, dismiss/redirect, supersede, cancel, inbox and the browser guard now work.
+**Status: Phase 1 in progress.** All Question kinds, Locks, Drafts, dismiss/redirect, supersede, cancel, inbox and the browser guard now work, plus the Command Center's answered log (`/log`): full-text search, filters, Copy as Markdown and Export JSON.
 
 ## Run it
 
