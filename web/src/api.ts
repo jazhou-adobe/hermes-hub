@@ -1,4 +1,4 @@
-import type { FeedRoundView } from "../../src/hub/engine.ts";
+import type { FeedRoundView, LogEntry, LogFilter } from "../../src/hub/engine.ts";
 import type { Draft, DismissInput, RedirectInput, SendInput } from "../../src/schema/validate.ts";
 
 async function problemDetail(res: Response): Promise<string> {
@@ -38,3 +38,30 @@ export async function saveDraft(id: string, draft: Draft): Promise<void> {
   });
   if (!res.ok) throw new Error(await problemDetail(res));
 }
+
+function logQuery(filter: LogFilter): string {
+  const p = new URLSearchParams();
+  if (filter.outcome !== undefined) p.set("outcome", filter.outcome);
+  if (filter.session_id !== undefined) p.set("session_id", filter.session_id);
+  if (filter.callsign !== undefined) p.set("callsign", filter.callsign);
+  if (filter.project !== undefined) p.set("project", filter.project);
+  if (filter.from !== undefined) p.set("from", filter.from);
+  if (filter.to !== undefined) p.set("to", filter.to);
+  if (filter.q !== undefined) p.set("q", filter.q);
+  const qs = p.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export interface LogResponse {
+  entries: LogEntry[];
+  db_size_bytes: number;
+}
+
+export async function fetchLog(filter: LogFilter): Promise<LogResponse> {
+  const res = await fetch(`/cc/log${logQuery(filter)}`);
+  if (!res.ok) throw new Error(await problemDetail(res));
+  return res.json();
+}
+
+/** `/cc/log/export`'s URL for the current filter; a plain navigation triggers the download. */
+export const logExportUrl = (filter: LogFilter): string => `/cc/log/export${logQuery(filter)}`;
