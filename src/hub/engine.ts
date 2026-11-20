@@ -1,6 +1,10 @@
 import type { Database } from "bun:sqlite";
+import { existsSync, mkdtempSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DEFAULT_CONFIG, type AutoAskRule, type HubConfig } from "../config.ts";
 import { HubError } from "../errors.ts";
-import { canonicalJson, effectivePolicy, hubChecks, LIMITS, oversizedAttachment } from "../schema/checks.ts";
+import { canonicalJson, effectivePolicy, hubChecks, oversizedAttachment } from "../schema/checks.ts";
 import type { Answer, Outcome, PendingStatus, QuestionValue, Round } from "../schema/types.ts";
 import {
   isDismissInput,
@@ -14,8 +18,20 @@ import {
   type SessionRequest,
 } from "../schema/validate.ts";
 import { VERSION } from "../version.ts";
+import {
+  buildPrompt,
+  capOutput,
+  draftHasValue,
+  extractLastJsonObject,
+  parseSuggestion,
+  type AdvisorRunView,
+  type Suggestion,
+} from "./advisors.ts";
 import { answerQuestions, lockValue, parseHumanValue, type Locks } from "./answers.ts";
-import { callsign } from "./callsign.ts";
+import { callsign, project } from "./callsign.ts";
+import { noopLogger, type Logger } from "./log.ts";
+
+export type { AdvisorRunView, Suggestion } from "./advisors.ts";
 
 export interface SessionRow {
   id: string;
@@ -41,6 +57,21 @@ interface RoundRow {
   locks: string;
   draft: string | null;
   feed_removed_at: string | null;
+  /** The Round's current valid Suggestion (delegation spec), JSON; cleared when the Round ends. */
+  suggestion: string | null;
+}
+
+interface AdvisorRunRow {
+  id: string;
+  round_id: string;
+  advisor_name: string;
+  trigger: "manual" | "auto";
+  brief: string | null;
+  started_at: string;
+  ended_at: string | null;
+  status: AdvisorRunView["status"];
+  raw_output: string | null;
+  suggestion: string | null;
 }
 
 /** A Round as the Command Center sees it: pending, or ended in place (expired, cancelled, superseded). */
@@ -56,6 +87,10 @@ export interface FeedRoundView {
   deadlines: Record<string, string>;
   draft: Draft | null;
   answer: Answer | null;
+  /** Advisor runs for this Round, most recent first (delegation spec: History). */
+  advisor_runs: AdvisorRunView[];
+  /** The Round's current valid Suggestion, if any (delegation spec). */
+  suggestion: Suggestion | null;
 }
 
 export type HubEvent =
@@ -66,7 +101,65 @@ export type HubEvent =
   /** A new Round took the place of `replaces`. */
   | { type: "round.superseded"; replaces: string; view: FeedRoundView }
   | { type: "round.removed"; round_id: string }
-  | { type: "draft.saved"; round_id: string; draft: Draft };
+  | { type: "draft.saved"; round_id: string; draft: Draft }
+  /** An Advisor run started on this Round (delegation spec); `view.advisor_runs[0]` is the new run. */
+  | { type: "advisor.started"; view: FeedRoundView }
+  /** An Advisor run ended (succeeded, failed, timed out or was cancelled). */
+  | { type: "advisor.ended"; view: FeedRoundView };
+
+/** Filters for the answered log; present fields combine with AND (answered-log spec). */
+export interface LogFilter {
+  outcome?: Outcome;
+  session_id?: string;
+  callsign?: string;
+  project?: string;
+  /** `decided_at >= from` */
+  from?: string;
+  /** `decided_at <= to` */
+  to?: string;
+  /** Free-text query over `log_fts`. */
+  q?: string;
+  limit?: number;
+}
+
+export interface LogMeta {
+  round_id: string;
+  callsign: string;
+  project: string | null;
+  received_at: string;
+  delivered_at: string | null;
+  superseded_by?: string;
+}
+
+/** One ended Round as the answered log shows it: `{round, answer, meta}` plus the Draft snapshot
+ * and, for a free-text search, the matched snippet with `<mark>` highlights. */
+export interface LogEntry {
+  round: Round;
+  answer: Answer;
+  meta: LogMeta;
+  draft: Draft | null;
+  snippet?: string;
+}
+
+/** Round content never reaches the log (logs spec): just ids, event names, callsigns, outcomes. */
+function logFieldsFor(e: HubEvent): Record<string, unknown> {
+  switch (e.type) {
+    case "round.created":
+    case "round.locked":
+      return { round_id: e.view.id, session_id: e.view.session.id, callsign: e.view.session.callsign };
+    case "round.ended":
+      return { round_id: e.round_id, outcome: e.answer.outcome };
+    case "round.superseded":
+      return { round_id: e.view.id, replaces: e.replaces };
+    case "round.removed":
+      return { round_id: e.round_id };
+    case "draft.saved":
+      return { round_id: e.round_id };
+    case "advisor.started":
+    case "advisor.ended":
+      return { round_id: e.view.id, callsign: e.view.session.callsign };
+  }
+}
 
 export interface Clock {
   now(): number;
@@ -85,6 +178,8 @@ const LEAVES_FEED: Record<Outcome, boolean> = {
   expired: false,
   cancelled: false,
 };
+/** Grace period between SIGTERM and SIGKILL, for both a timeout and a Cancel (delegation spec). */
+const SIGKILL_GRACE_MS = 5000;
 
 function newId(prefix: string): string {
   const bytes = crypto.getRandomValues(new Uint8Array(12));
@@ -93,16 +188,41 @@ function newId(prefix: string): string {
   return id;
 }
 
+/** A tracked, still-running Advisor process; at most one per Round (delegation spec). */
+interface RunningAdvisor {
+  run_id: string;
+  proc: Bun.Subprocess<"pipe", "pipe", "pipe">;
+  /** Set when Cancel or the Round ending asked this run to stop. */
+  cancelled: boolean;
+  /** Set when its own `timeout_seconds` fired first. */
+  timedOut: boolean;
+  timeoutTimer: ReturnType<typeof setTimeout>;
+  killTimer?: ReturnType<typeof setTimeout>;
+}
+
 /** The Round engine: every door (HTTP, MCP, CLI) maps onto these operations. */
 export class Engine {
   private readonly listeners = new Set<(e: HubEvent) => void>();
   private timer: ReturnType<typeof setTimeout> | undefined;
+  /** The one running Advisor process per Round, if any (delegation spec). */
+  private readonly runningAdvisors = new Map<string, RunningAdvisor>();
 
   constructor(
     private readonly db: Database,
     private readonly baseUrl: string,
     private readonly clock: Clock = systemClock,
+    private config: HubConfig = DEFAULT_CONFIG,
+    private readonly logger: Logger = noopLogger,
   ) {}
+
+  /** Applies a hot-reloaded `config.toml` (the caller, `src/hub/run.ts`, keeps the bound port). */
+  setConfig(config: HubConfig): void {
+    this.config = config;
+  }
+
+  private get limits() {
+    return this.config.limits;
+  }
 
   private now(): string {
     return new Date(this.clock.now()).toISOString();
@@ -114,7 +234,10 @@ export class Engine {
   }
 
   private emit(events: HubEvent[]): void {
-    for (const event of events) for (const listener of this.listeners) listener(event);
+    for (const event of events) {
+      this.logger.log("info", event.type, logFieldsFor(event));
+      for (const listener of this.listeners) listener(event);
+    }
   }
 
   /** Fires overdue policies (after a restart, in deadline order), then keeps a timer on the next deadline. */
@@ -129,7 +252,7 @@ export class Engine {
 
   hubInfo() {
     const row = this.db.query<{ value: string }, []>("SELECT value FROM meta WHERE key = 'hub_id'").get();
-    return { hub_id: row!.value, version: VERSION, schemas: SUPPORTED_SCHEMAS, limits: LIMITS };
+    return { hub_id: row!.value, version: VERSION, schemas: SUPPORTED_SCHEMAS, limits: this.limits };
   }
 
   // ── Sessions ────────────────────────────────────────────────────────────
@@ -193,8 +316,8 @@ export class Engine {
     doc: unknown,
     bodyBytes: number,
   ): { round_id: string; url: string; status: "pending" | Outcome; replay: boolean } {
-    if (bodyBytes > LIMITS.round_bytes) {
-      throw new HubError("too_large", `the Round is over ${LIMITS.round_bytes} bytes`, { limit: LIMITS.round_bytes, pointer: "" });
+    if (bodyBytes > this.limits.round_bytes) {
+      throw new HubError("too_large", `the Round is over ${this.limits.round_bytes} bytes`, { limit: this.limits.round_bytes, pointer: "" });
     }
     const schema = doc && typeof doc === "object" && "schema" in doc ? doc.schema : undefined;
     if (typeof schema === "string" && /^hermes\.round\/v\d+$/.test(schema) && !SUPPORTED_SCHEMAS.includes(schema)) {
@@ -205,10 +328,10 @@ export class Engine {
     const round = doc as Round; // validated against the schema above
     const errors = hubChecks(round);
     if (errors.length) throw new HubError("invalid_round", "the Round failed the Hub's checks", { errors });
-    const oversized = oversizedAttachment(round);
+    const oversized = oversizedAttachment(round, this.limits);
     if (oversized !== undefined) {
-      throw new HubError("too_large", `attachment ${oversized} is over ${LIMITS.attachment_bytes} bytes`, {
-        limit: LIMITS.attachment_bytes,
+      throw new HubError("too_large", `attachment ${oversized} is over ${this.limits.attachment_bytes} bytes`, {
+        limit: this.limits.attachment_bytes,
         pointer: oversized,
       });
     }
@@ -251,9 +374,9 @@ export class Engine {
            FROM rounds WHERE session_id = ?1 AND status = 'pending'`,
         )
         .get(session.id)!;
-      if (pending.n >= LIMITS.pending_per_session) {
+      if (pending.n >= this.limits.pending_per_session) {
         throw new HubError("flood_cap", `this session already has ${pending.n} pending Rounds`, {
-          limit: LIMITS.pending_per_session,
+          limit: this.limits.pending_per_session,
           oldest_round_id: pending.oldest,
         });
       }
@@ -275,6 +398,14 @@ export class Engine {
     })();
     this.emit(events);
     this.schedule();
+    const rule = this.matchAutoAsk(session);
+    if (rule) {
+      try {
+        this.askAdvisor(id, rule.advisor, rule.brief, "auto");
+      } catch (err) {
+        console.error(`hermes hub: auto-ask rule for Advisor "${rule.advisor}" failed to start on Round ${id}:`, err);
+      }
+    }
     return { round_id: id, url: this.roundUrl(id), status: "pending", replay: false };
   }
 
@@ -376,11 +507,12 @@ export class Engine {
     const row = this.pendingRow(id);
     const round: Round = JSON.parse(row.round);
     const locks: Locks = JSON.parse(row.locks);
+    const suggestion: Suggestion | null = row.suggestion ? JSON.parse(row.suggestion) : null;
     const known = new Set(round.questions.map((q) => q.id));
     const errors = Object.keys(input.questions)
       .filter((qid) => !known.has(qid))
       .map((qid) => ({ pointer: `/questions/${qid}`, message: "unknown Question" }));
-    const human: Record<string, { value: QuestionValue; note?: string }> = {};
+    const human: Record<string, { value: QuestionValue; note?: string; suggested_by?: string }> = {};
     for (const q of round.questions) {
       if (locks[q.id]) continue;
       const given = input.questions[q.id];
@@ -390,7 +522,11 @@ export class Engine {
         continue;
       }
       if (value === null && q.required !== false) errors.push({ pointer: `/questions/${q.id}`, message: "required" });
-      human[q.id] = { value, ...(given?.note ? { note: given.note } : {}) };
+      // suggested_by (delegation spec): the Human sent this Advisor's Suggestion unchanged; set_by stays human.
+      const suggested = suggestion?.questions[q.id];
+      const suggested_by =
+        value !== null && suggested !== undefined && canonicalJson(value) === canonicalJson(suggested.value) ? suggestion!.advisor : undefined;
+      human[q.id] = { value, ...(given?.note ? { note: given.note } : {}), ...(suggested_by ? { suggested_by } : {}) };
     }
     if (errors.length) throw new HubError("invalid_answer", "the Answer is incomplete or invalid", { errors });
     return this.humanEnd(row, "answered", { ...(input.note ? { note: input.note } : {}) }, human, true);
@@ -413,6 +549,236 @@ export class Engine {
     if (row.status === "pending") throw new HubError("round_pending", `Round ${id} is still pending`);
     this.db.query("UPDATE rounds SET feed_removed_at = coalesce(feed_removed_at, ?) WHERE id = ?").run(this.now(), id);
     this.emit([{ type: "round.removed", round_id: id }]);
+  }
+
+  // ── Delegation (Advisors) ────────────────────────────────────────────────
+
+  /** Configured Advisor names, for the Human's "Ask advisor" picker. */
+  advisorNames(): string[] {
+    return this.config.advisors.map((a) => a.name);
+  }
+
+  /**
+   * Starts an Advisor run on `roundId` (delegation spec): cancels any run already active on this
+   * Round, spawns the Advisor's command with the prompt on stdin, and applies its timeout. Returns the
+   * new run at once; it finishes in the background and is reported via `advisor.ended`.
+   */
+  askAdvisor(roundId: string, advisorName: string, brief: string | undefined, trigger: "manual" | "auto"): AdvisorRunView {
+    const row = this.pendingRow(roundId);
+    const advisor = this.config.advisors.find((a) => a.name === advisorName);
+    if (!advisor) throw new HubError("advisor_not_found", `no Advisor "${advisorName}" in config.toml`);
+    this.killRunning(roundId); // one run per Round at a time; a new request cancels the running one
+
+    const round: Round = JSON.parse(row.round);
+    const session = this.db.query<{ cwd: string | null }, [string]>("SELECT cwd FROM sessions WHERE id = ?").get(row.session_id);
+    const cwd = session?.cwd && existsSync(session.cwd) ? session.cwd : mkdtempSync(join(tmpdir(), "hermes-advisor-"));
+
+    const runId = newId("adv_");
+    const started_at = this.now();
+    this.db
+      .query(
+        `INSERT INTO advisor_runs (id, round_id, advisor_name, trigger, brief, started_at, status)
+         VALUES (?, ?, ?, ?, ?, ?, 'running')`,
+      )
+      .run(runId, roundId, advisorName, trigger, brief ?? null, started_at);
+
+    const proc = Bun.spawn(advisor.command, {
+      cwd,
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, HERMES_ADVISOR: runId },
+    });
+    proc.stdin.write(buildPrompt(round, brief));
+    void proc.stdin.end();
+
+    const running: RunningAdvisor = { run_id: runId, proc, cancelled: false, timedOut: false, timeoutTimer: undefined as never };
+    running.timeoutTimer = setTimeout(() => {
+      running.timedOut = true;
+      proc.kill("SIGTERM");
+      running.killTimer = setTimeout(() => proc.kill("SIGKILL"), SIGKILL_GRACE_MS);
+    }, advisor.timeout_seconds * 1000);
+    this.runningAdvisors.set(roundId, running);
+
+    void this.finishAdvisorRun(roundId, runId, advisorName, round, running);
+
+    this.emit([{ type: "advisor.started", view: this.view(roundId)! }]);
+    return this.advisorRunView(runId)!;
+  }
+
+  /** Cancel: SIGTERM, then SIGKILL after 5s, the Advisor process running on this Round, if any. */
+  cancelAdvisor(roundId: string): void {
+    if (!this.row(roundId)) throw new HubError("not_found", `no Round ${roundId}`);
+    this.killRunning(roundId);
+  }
+
+  /** Signals the running Advisor (if any) to stop; its own completion handler records the final status. */
+  private killRunning(roundId: string): void {
+    const running = this.runningAdvisors.get(roundId);
+    if (!running) return;
+    running.cancelled = true;
+    running.proc.kill("SIGTERM");
+    running.killTimer ??= setTimeout(() => running.proc.kill("SIGKILL"), SIGKILL_GRACE_MS);
+  }
+
+  /** Auto-ask (delegation spec): matches on kind + project (git root, or cwd), label optionally narrows it. */
+  private matchAutoAsk(session: SessionRow): AutoAskRule | undefined {
+    if (this.config.autoAsk.length === 0) return undefined;
+    const project = this.projectFor(session.id);
+    return this.config.autoAsk.find(
+      (r) => r.kind === session.kind && r.project === project && (r.label === undefined || r.label === session.label),
+    );
+  }
+
+  private projectFor(sessionId: string): string | null {
+    const row = this.db.query<{ cwd: string | null; git: string | null }, [string]>("SELECT cwd, git FROM sessions WHERE id = ?").get(sessionId);
+    if (!row) return null;
+    const git = row.git ? (JSON.parse(row.git) as { root?: string } | null) : null;
+    return git?.root ?? row.cwd ?? null;
+  }
+
+  /** Awaits the spawned process, records its outcome, and merges a valid Suggestion into the Draft. */
+  private async finishAdvisorRun(
+    roundId: string,
+    runId: string,
+    advisorName: string,
+    round: Round,
+    running: RunningAdvisor,
+  ): Promise<void> {
+    const [stdout, exitCode] = await Promise.all([
+      new Response(running.proc.stdout).text(),
+      new Response(running.proc.stderr).text().catch(() => ""),
+      running.proc.exited,
+    ]).then(([out, , code]) => [out, code] as const);
+    clearTimeout(running.timeoutTimer);
+    clearTimeout(running.killTimer);
+    if (this.runningAdvisors.get(roundId) === running) this.runningAdvisors.delete(roundId);
+
+    let status: AdvisorRunView["status"];
+    let suggestion: Suggestion | null = null;
+    if (running.timedOut) {
+      status = "timed_out";
+    } else if (running.cancelled) {
+      status = "cancelled";
+    } else if (exitCode === 0) {
+      const parsed = parseSuggestion(round, extractLastJsonObject(stdout));
+      if (parsed) {
+        status = "succeeded";
+        suggestion = {
+          advisor: advisorName,
+          run_id: runId,
+          ...(parsed.summary ? { summary: parsed.summary } : {}),
+          questions: parsed.questions,
+          ...(parsed.skipped.length ? { skipped: parsed.skipped } : {}),
+        };
+      } else {
+        status = "failed";
+      }
+    } else {
+      status = "failed";
+    }
+
+    const ended_at = this.now();
+    const rawOutput = capOutput(stdout);
+    this.db
+      .query("UPDATE advisor_runs SET ended_at = ?, status = ?, raw_output = ?, suggestion = ? WHERE id = ?")
+      .run(ended_at, status, rawOutput, suggestion ? JSON.stringify(suggestion) : null, runId);
+
+    const row = this.row(roundId);
+    if (row && row.status === "pending" && suggestion) this.mergeSuggestion(roundId, row, suggestion);
+    if (row) this.emit([{ type: "advisor.ended", view: this.view(roundId)! }]);
+  }
+
+  /** Fills empty, open Questions in the Draft with the Suggestion's values; Locked and already-set ones are untouched. */
+  private mergeSuggestion(roundId: string, row: RoundRow, suggestion: Suggestion): void {
+    const locks: Locks = JSON.parse(row.locks);
+    const draft = parseDraft(row.draft) ?? {};
+    const draftQuestions = { ...(draft.questions ?? {}) };
+    let changed = false;
+    for (const [qid, s] of Object.entries(suggestion.questions)) {
+      if (locks[qid]) continue; // a firing policy ignores the Suggestion
+      if (draftHasValue(draftQuestions[qid]?.value)) continue; // the Human already set it; offered inline instead
+      draftQuestions[qid] = { value: s.value };
+      changed = true;
+    }
+    if (changed) {
+      const nextDraft: Draft = { ...draft, questions: draftQuestions };
+      this.db.query("UPDATE rounds SET suggestion = ?, draft = ? WHERE id = ?").run(JSON.stringify(suggestion), JSON.stringify(nextDraft), roundId);
+    } else {
+      this.db.query("UPDATE rounds SET suggestion = ? WHERE id = ?").run(JSON.stringify(suggestion), roundId);
+    }
+  }
+
+  private advisorRunView(id: string): AdvisorRunView | null {
+    const row = this.db.query<AdvisorRunRow, [string]>("SELECT * FROM advisor_runs WHERE id = ?").get(id);
+    return row ? toAdvisorRunView(row) : null;
+  }
+
+  // ── Answered log (Command Center) ────────────────────────────────────────
+
+  /** The answered log: every ended Round, newest first, with the filters combined by AND. */
+  log(filter: LogFilter = {}): LogEntry[] {
+    const clauses: string[] = ["r.status <> 'pending'"];
+    const params: string[] = [];
+    if (filter.outcome !== undefined) {
+      clauses.push("r.status = ?");
+      params.push(filter.outcome);
+    }
+    if (filter.session_id !== undefined) {
+      clauses.push("r.session_id = ?");
+      params.push(filter.session_id);
+    }
+    if (filter.project !== undefined) {
+      clauses.push("coalesce(json_extract(s.git, '$.root'), s.cwd) = ?");
+      params.push(filter.project);
+    }
+    if (filter.from !== undefined) {
+      clauses.push("r.decided_at >= ?");
+      params.push(filter.from);
+    }
+    if (filter.to !== undefined) {
+      clauses.push("r.decided_at <= ?");
+      params.push(filter.to);
+    }
+
+    type LogRow = RoundRow & { kind: string; session_key: string; label: string | null; cwd: string | null; git: string | null; snippet: string | null };
+    let rows: LogRow[];
+    if (filter.q !== undefined) {
+      clauses.push("log_fts MATCH ?");
+      params.push(filter.q);
+      rows = this.db
+        .query<LogRow, string[]>(
+          `SELECT r.*, s.kind, s.session_key, s.label, s.cwd, s.git, snippet(log_fts, 1, '<mark>', '</mark>', '…', 16) AS snippet
+           FROM rounds r JOIN sessions s ON s.id = r.session_id JOIN log_fts ON log_fts.round_id = r.id
+           WHERE ${clauses.join(" AND ")} ORDER BY bm25(log_fts)`,
+        )
+        .all(...params);
+    } else {
+      rows = this.db
+        .query<LogRow, string[]>(
+          `SELECT r.*, s.kind, s.session_key, s.label, s.cwd, s.git, NULL AS snippet
+           FROM rounds r JOIN sessions s ON s.id = r.session_id
+           WHERE ${clauses.join(" AND ")} ORDER BY r.decided_at DESC, r.rowid DESC`,
+        )
+        .all(...params);
+    }
+    let entries = rows.map((r) => this.toLogEntry(r));
+    if (filter.callsign !== undefined) entries = entries.filter((e) => e.meta.callsign === filter.callsign);
+    return filter.limit !== undefined ? entries.slice(0, filter.limit) : entries;
+  }
+
+  /** The filtered log as `{round, answer, meta}` documents, for Export JSON. */
+  exportLog(filter: LogFilter = {}): { round: Round; answer: Answer; meta: LogMeta }[] {
+    return this.log(filter).map(({ round, answer, meta }) => ({ round, answer, meta }));
+  }
+
+  /** The database file's size on disk, for Settings → Storage. 0 for an in-memory database. */
+  dbSizeBytes(): number {
+    try {
+      return statSync(this.db.filename).size;
+    } catch {
+      return 0;
+    }
   }
 
   // ── Policies ────────────────────────────────────────────────────────────
@@ -500,7 +866,7 @@ export class Engine {
     row: RoundRow,
     outcome: "answered" | "dismissed" | "redirected",
     extras: Partial<Answer>,
-    human?: Record<string, { value: QuestionValue; note?: string }>,
+    human?: Record<string, { value: QuestionValue; note?: string; suggested_by?: string }>,
     clearDraft = false,
   ): Answer {
     const event = this.db.transaction(() => {
@@ -517,8 +883,9 @@ export class Engine {
     row: RoundRow,
     outcome: Outcome,
     extras: Partial<Answer>,
-    human?: Record<string, { value: QuestionValue; note?: string }>,
+    human?: Record<string, { value: QuestionValue; note?: string; suggested_by?: string }>,
   ): Extract<HubEvent, { type: "round.ended" }> {
+    this.killRunning(row.id); // a run never outlives the Round (delegation spec)
     const round: Round = JSON.parse(row.round);
     const decided_at = this.now();
     const answer: Answer = {
@@ -531,9 +898,10 @@ export class Engine {
     };
     const removed = LEAVES_FEED[outcome] ? decided_at : null;
     this.db
-      .query("UPDATE rounds SET status = ?, answer = ?, decided_at = ?, feed_removed_at = ? WHERE id = ? AND status = 'pending'")
+      .query("UPDATE rounds SET status = ?, answer = ?, decided_at = ?, feed_removed_at = ?, suggestion = NULL WHERE id = ? AND status = 'pending'")
       .run(outcome, JSON.stringify(answer), decided_at, removed, row.id);
     this.db.query("DELETE FROM question_deadlines WHERE round_id = ?").run(row.id);
+    this.db.query("INSERT INTO log_fts (round_id, text) VALUES (?, ?)").run(row.id, logSearchText(round, answer));
     return { type: "round.ended", round_id: row.id, answer, view: removed ? null : this.view(row.id) };
   }
 
@@ -547,6 +915,10 @@ export class Engine {
     const deadlines = this.db
       .query<{ question_id: string; deadline: string }, [string]>("SELECT question_id, deadline FROM question_deadlines WHERE round_id = ?")
       .all(id);
+    const advisorRuns = this.db
+      .query<AdvisorRunRow, [string]>("SELECT * FROM advisor_runs WHERE round_id = ? ORDER BY started_at DESC, rowid DESC")
+      .all(id)
+      .map(toAdvisorRunView);
     return {
       id: r.id,
       status: r.status,
@@ -558,6 +930,26 @@ export class Engine {
       deadlines: Object.fromEntries(deadlines.map((d) => [d.question_id, d.deadline])),
       draft: parseDraft(r.draft),
       answer: r.answer ? JSON.parse(r.answer) : null,
+      advisor_runs: advisorRuns,
+      suggestion: r.suggestion ? JSON.parse(r.suggestion) : null,
+    };
+  }
+
+  private toLogEntry(r: RoundRow & { kind: string; session_key: string; label: string | null; cwd: string | null; git: string | null; snippet: string | null }): LogEntry {
+    const answer: Answer = JSON.parse(r.answer!);
+    return {
+      round: JSON.parse(r.round),
+      answer,
+      draft: parseDraft(r.draft),
+      meta: {
+        round_id: r.id,
+        callsign: callsign(r),
+        project: project(r),
+        received_at: r.received_at,
+        delivered_at: r.delivered_at,
+        ...(answer.superseded_by !== undefined ? { superseded_by: answer.superseded_by } : {}),
+      },
+      ...(r.snippet !== null ? { snippet: r.snippet } : {}),
     };
   }
 }
@@ -574,4 +966,60 @@ function carryDraft(oldRound: Round, draft: Draft | null, next: Round): Draft | 
     next.questions.filter((q) => oldKinds.get(q.id) === q.kind && draft.questions![q.id]).map((q) => [q.id, draft.questions![q.id]!]),
   );
   return Object.keys(questions).length ? { questions } : null;
+}
+
+function toAdvisorRunView(row: AdvisorRunRow): AdvisorRunView {
+  return {
+    id: row.id,
+    advisor_name: row.advisor_name,
+    trigger: row.trigger,
+    brief: row.brief,
+    started_at: row.started_at,
+    ended_at: row.ended_at,
+    status: row.status,
+    raw_output: row.raw_output,
+    suggestion: row.suggestion ? JSON.parse(row.suggestion) : null,
+  };
+}
+
+/** Builds the free-text index for a Round once it ends (answered-log spec): title, context, each
+ * Question's prompt/detail, option labels/details, free-text answers, the Human's notes and the
+ * redirect message. Attachments are never indexed. */
+function logSearchText(round: Round, answer: Answer): string {
+  const parts: string[] = [round.title];
+  if (round.context) parts.push(round.context);
+  for (const q of round.questions) {
+    parts.push(q.prompt);
+    if (q.detail) parts.push(q.detail);
+    if (q.kind === "single" || q.kind === "multi") {
+      for (const o of q.options) {
+        parts.push(o.label);
+        if (o.detail) parts.push(o.detail);
+      }
+    }
+    const qa = answer.questions[q.id];
+    if (!qa) continue;
+    if (qa.note) parts.push(qa.note);
+    const v = qa.value;
+    if (!v) continue;
+    if ("text" in v) {
+      parts.push(v.text);
+    } else if ("selected" in v) {
+      if (q.kind === "single" && typeof v.selected === "string") {
+        const opt = q.options.find((o) => o.id === v.selected);
+        if (opt) parts.push(opt.label);
+      } else if (q.kind === "multi" && Array.isArray(v.selected)) {
+        for (const id of v.selected) {
+          const opt = q.options.find((o) => o.id === id);
+          if (opt) parts.push(opt.label);
+        }
+      }
+      if ("other" in v && v.other) parts.push(v.other);
+    } else if ("other" in v) {
+      parts.push(v.other);
+    }
+  }
+  if (answer.note) parts.push(answer.note);
+  if (answer.message) parts.push(answer.message);
+  return parts.join("\n");
 }

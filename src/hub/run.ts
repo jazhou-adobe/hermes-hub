@@ -1,12 +1,43 @@
 import { rmSync, writeFileSync } from "node:fs";
-import { loadConfig } from "../config.ts";
+import { loadConfig, type HubConfig } from "../config.ts";
 import { migrationStatus, openDb } from "../db/db.ts";
-import { dbPath, hubJsonPath } from "../paths.ts";
+import { backupsDir, configPath, dbPath, hubJsonPath, hubLockPath, logPath } from "../paths.ts";
 import { VERSION } from "../version.ts";
+import { ensureDailyBackup } from "./backup.ts";
+import { watchConfig } from "./configWatcher.ts";
 import { Engine } from "./engine.ts";
+import { acquireLock, releaseLock } from "./lock.ts";
+import { createLogger } from "./log.ts";
 import { startServer } from "./server.ts";
 
-/** `hermes hub`: refuses while migrations are pending, fires overdue policies, then serves until SIGINT/SIGTERM. */
+/** How many ports above the configured one to try before giving up (two Hubs, different folders). */
+const MAX_PORT_ATTEMPTS = 20;
+/** "Once per day while running" (hub-operations spec) is the bar; checking hourly is simple and safe. */
+const DAILY_BACKUP_CHECK_MS = 60 * 60_000;
+
+function isAddrInUse(err: unknown): boolean {
+  return err instanceof Error && "code" in err && err.code === "EADDRINUSE";
+}
+
+/** The next free port from `start`, probed with a throwaway listener (same trick the tests use). */
+function freePortFrom(start: number): number {
+  for (let port = start; port < start + MAX_PORT_ATTEMPTS; port++) {
+    try {
+      const probe = Bun.listen({ hostname: "127.0.0.1", port, socket: { data() {} } });
+      probe.stop(true);
+      return port;
+    } catch (err) {
+      if (!isAddrInUse(err)) throw err;
+    }
+  }
+  throw new Error(`no free port found from ${start} to ${start + MAX_PORT_ATTEMPTS - 1}`);
+}
+
+/**
+ * `hermes hub`: refuses while migrations are pending, or while `hub.lock` is held by another live
+ * Hub on this data folder. Otherwise finds the next free port from the configured one, fires
+ * overdue policies, and serves until SIGINT/SIGTERM.
+ */
 export async function runHub(): Promise<number | undefined> {
   const db = openDb(dbPath());
   const status = migrationStatus(db);
@@ -19,18 +50,61 @@ export async function runHub(): Promise<number | undefined> {
     return 1;
   }
 
-  const { port } = loadConfig();
+  let config: HubConfig = loadConfig();
+  const logger = createLogger(logPath(), config.log_level);
+  const port = freePortFrom(config.port);
   const url = `http://127.0.0.1:${port}`;
+  const lockPath = hubLockPath();
+  const lock = acquireLock(lockPath, url);
+  if (!lock.ok) {
+    console.error(`hermes hub: already running at ${lock.holder.url} (pid ${lock.holder.pid})`);
+    db.close();
+    return 1;
+  }
+
   const hubJson = hubJsonPath(); // resolved before the server may chdir: HERMES_HOME may be relative
-  const engine = new Engine(db, url);
+  const engine = new Engine(db, url, undefined, config, logger);
   engine.start();
-  const server = await startServer(engine, port);
+  const server = await startServer(engine, port, logger);
   writeFileSync(
     hubJson,
     `${JSON.stringify({ url, version: VERSION, pid: process.pid, started_at: new Date().toISOString() }, null, 2)}\n`,
   );
 
+  const backups = backupsDir();
+  ensureDailyBackup(backups, db, config.backups.keep);
+  const backupTimer = setInterval(() => {
+    try {
+      ensureDailyBackup(backups, db, config.backups.keep);
+    } catch (err) {
+      logger.log("error", "backup.failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+  }, DAILY_BACKUP_CHECK_MS);
+
+  const stopWatching = watchConfig(
+    configPath(),
+    () => config,
+    (reload) => {
+      config = reload.config;
+      logger.setLevel(config.log_level);
+      engine.setConfig(config);
+      if (reload.restartNeeded) {
+        logger.log("warn", "config.restart_needed", { setting: "port" });
+        console.warn("hermes hub: config.toml's port changed; restart needed to apply it");
+      } else {
+        logger.log("info", "config.reloaded", {});
+      }
+    },
+    (err) => {
+      logger.log("error", "config.invalid", { error: err.message });
+      console.error(`hermes hub: ${err.message}`);
+    },
+  );
+
   const stop = () => {
+    stopWatching();
+    clearInterval(backupTimer);
+    releaseLock(lockPath);
     rmSync(hubJson, { force: true });
     engine.stop();
     void server.stop(true);
