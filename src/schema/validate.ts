@@ -57,26 +57,61 @@ export const isSessionRequest = ajv.compile<SessionRequest>({
   },
 });
 
+const noteSchema = { type: "string", maxLength: 16384 };
+const questionInputs = {
+  type: "object",
+  additionalProperties: {
+    type: "object",
+    properties: { value: {}, note: noteSchema },
+    additionalProperties: false,
+  },
+};
+
 /** What the Command Center posts when the Human sends a Round. */
 export interface SendInput {
   note?: string;
-  questions: Record<string, { value: unknown; note?: string }>;
+  questions: Record<string, { value?: unknown; note?: string }>;
 }
 
 export const isSendInput = ajv.compile<SendInput>({
   type: "object",
   required: ["questions"],
-  properties: {
-    note: { type: "string", maxLength: 16384 },
-    questions: {
-      type: "object",
-      additionalProperties: {
-        type: "object",
-        required: ["value"],
-        properties: { value: {}, note: { type: "string", maxLength: 16384 } },
-      },
-    },
-  },
+  properties: { note: noteSchema, questions: questionInputs },
+});
+
+/** The Human's unsent work on a Round, saved as they type. */
+export interface Draft {
+  questions?: Record<string, { value?: unknown; note?: string }>;
+  note?: string;
+  message?: string;
+}
+
+export const isDraft = ajv.compile<Draft>({
+  type: "object",
+  properties: { questions: questionInputs, note: noteSchema, message: noteSchema },
+  additionalProperties: false,
+});
+
+export interface DismissInput {
+  note?: string;
+}
+
+export const isDismissInput = ajv.compile<DismissInput>({
+  type: "object",
+  properties: { note: noteSchema },
+  additionalProperties: false,
+});
+
+export interface RedirectInput {
+  message: string;
+  note?: string;
+}
+
+export const isRedirectInput = ajv.compile<RedirectInput>({
+  type: "object",
+  required: ["message"],
+  properties: { message: { ...noteSchema, minLength: 1, pattern: "\\S" }, note: noteSchema },
+  additionalProperties: false,
 });
 
 export { issues as validationIssues };

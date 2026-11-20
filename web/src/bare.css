@@ -69,3 +69,61 @@ legend {
 [role="alert"] {
   color: crimson;
 }
+.round.lock-soon {
+  border-color: color-mix(in srgb, orange 60%, currentColor);
+}
+.lock-soon-badge {
+  color: darkorange;
+}
+.round.ended {
+  opacity: 0.85;
+}
+fieldset.locked {
+  opacity: 0.7;
+}
+.lock-note {
+  font-size: 0.85rem;
+  font-style: italic;
+  margin: 0 0 0.25rem;
+}
+.detail {
+  opacity: 0.8;
+  font-size: 0.9rem;
+}
+.links {
+  margin: 0.25rem 0;
+  padding-left: 1.2rem;
+}
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.redirect {
+  display: grid;
+  gap: 0.25rem;
+  margin-block: 0.5rem;
+}
+.redirect input {
+  width: 100%;
+}
+.proposal pre,
+.proposal textarea {
+  width: 100%;
+  white-space: pre-wrap;
+}
+.approve-buttons {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+.approve-buttons button[aria-pressed="true"] {
+  outline: 2px solid currentColor;
+}
+.recommended-text button {
+  margin-left: 0.5rem;
+}
+.draft-kept {
+  font-size: 0.85rem;
+  font-style: italic;
+}

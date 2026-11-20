@@ -1,17 +1,23 @@
 import type { Database } from "bun:sqlite";
 import { HubError } from "../errors.ts";
-import type { Answer, PendingStatus, QuestionAnswer, QuestionValue, Round, SingleQuestion } from "../schema/types.ts";
+import { canonicalJson, effectivePolicy, hubChecks, LIMITS, oversizedAttachment } from "../schema/checks.ts";
+import type { Answer, Outcome, PendingStatus, QuestionValue, Round } from "../schema/types.ts";
 import {
+  isDismissInput,
+  isDraft,
+  isRedirectInput,
   isSendInput,
   isSessionRequest,
   validateRound,
   validationIssues,
+  type Draft,
   type SessionRequest,
 } from "../schema/validate.ts";
 import { VERSION } from "../version.ts";
+import { answerQuestions, lockValue, parseHumanValue, type Locks } from "./answers.ts";
 import { callsign } from "./callsign.ts";
 
-interface SessionRow {
+export interface SessionRow {
   id: string;
   token: string;
   kind: string;
@@ -23,27 +29,62 @@ interface SessionRow {
 interface RoundRow {
   id: string;
   session_id: string;
-  status: string;
+  status: "pending" | Outcome;
   round: string;
   answer: string | null;
   received_at: string;
+  decided_at: string | null;
   delivered_at: string | null;
+  position: number;
+  idempotency_key: string | null;
+  body_hash: string | null;
+  locks: string;
+  draft: string | null;
+  feed_removed_at: string | null;
 }
 
-/** A Pending Round as the Command Center sees it. */
-export interface PendingRoundView {
+/** A Round as the Command Center sees it: pending, or ended in place (expired, cancelled, superseded). */
+export interface FeedRoundView {
   id: string;
+  status: "pending" | Outcome;
+  position: number;
   received_at: string;
   session: { id: string; kind: string; callsign: string };
   round: Round;
+  locks: Locks;
+  /** Absolute deadlines of open Questions, by Question id. */
+  deadlines: Record<string, string>;
+  draft: Draft | null;
+  answer: Answer | null;
 }
 
 export type HubEvent =
-  | { type: "round.created"; round: PendingRoundView }
-  | { type: "round.ended"; round_id: string; answer: Answer };
+  | { type: "round.created"; view: FeedRoundView }
+  | { type: "round.locked"; view: FeedRoundView }
+  /** `view` is set when the Round stays in the Feed (ended in place); null when it leaves for the log. */
+  | { type: "round.ended"; round_id: string; answer: Answer; view: FeedRoundView | null }
+  /** A new Round took the place of `replaces`. */
+  | { type: "round.superseded"; replaces: string; view: FeedRoundView }
+  | { type: "round.removed"; round_id: string }
+  | { type: "draft.saved"; round_id: string; draft: Draft };
 
+export interface Clock {
+  now(): number;
+}
+
+const systemClock: Clock = { now: () => Date.now() };
 const SUPPORTED_SCHEMAS = ["hermes.round/v1"];
 const ID_ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
+/** Re-check deadlines at least this often, so a far-off timer never overflows. */
+const MAX_TIMER_MS = 60 * 60_000;
+/** Outcomes the Human chose: the Round leaves the Feed at once. The others end in place. */
+const LEAVES_FEED: Record<Outcome, boolean> = {
+  answered: true,
+  dismissed: true,
+  redirected: true,
+  expired: false,
+  cancelled: false,
+};
 
 function newId(prefix: string): string {
   const bytes = crypto.getRandomValues(new Uint8Array(12));
@@ -52,30 +93,46 @@ function newId(prefix: string): string {
   return id;
 }
 
-const now = () => new Date().toISOString();
-
 /** The Round engine: every door (HTTP, MCP, CLI) maps onto these operations. */
 export class Engine {
   private readonly listeners = new Set<(e: HubEvent) => void>();
+  private timer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly db: Database,
     private readonly baseUrl: string,
+    private readonly clock: Clock = systemClock,
   ) {}
+
+  private now(): string {
+    return new Date(this.clock.now()).toISOString();
+  }
 
   subscribe(listener: (e: HubEvent) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
-  private emit(event: HubEvent): void {
-    for (const listener of this.listeners) listener(event);
+  private emit(events: HubEvent[]): void {
+    for (const event of events) for (const listener of this.listeners) listener(event);
+  }
+
+  /** Fires overdue policies (after a restart, in deadline order), then keeps a timer on the next deadline. */
+  start(): void {
+    this.fireDue();
+  }
+
+  stop(): void {
+    clearTimeout(this.timer);
+    this.timer = undefined;
   }
 
   hubInfo() {
     const row = this.db.query<{ value: string }, []>("SELECT value FROM meta WHERE key = 'hub_id'").get();
-    return { hub_id: row!.value, version: VERSION, schemas: SUPPORTED_SCHEMAS, limits: {} };
+    return { hub_id: row!.value, version: VERSION, schemas: SUPPORTED_SCHEMAS, limits: LIMITS };
   }
+
+  // ── Sessions ────────────────────────────────────────────────────────────
 
   /** `POST /v1/sessions`: idempotent on (kind, session key); latest label, cwd and git win. */
   upsertSession(body: unknown): { session_id: string; token: string; callsign: string } {
@@ -83,7 +140,7 @@ export class Engine {
       throw new HubError("invalid_round", "invalid session request", { errors: validationIssues(isSessionRequest.errors) });
     }
     const req: SessionRequest = body;
-    const t = now();
+    const t = this.now();
     const json = (v: unknown) => (v == null ? null : JSON.stringify(v));
     const row = this.db
       .query<SessionRow, Record<string, string | null>>(
@@ -119,53 +176,113 @@ export class Engine {
           .query<SessionRow, [string, string]>(
             "UPDATE sessions SET last_seen = ? WHERE token = ? RETURNING id, token, kind, session_key, label, cwd",
           )
-          .get(now(), token)
+          .get(this.now(), token)
       : null;
     if (!row) throw new HubError("unknown_session", "missing or unknown Hermes-Session token; call POST /v1/sessions");
     return row;
   }
 
-  submit(session: SessionRow, doc: unknown): { round_id: string; url: string; status: "pending" } {
+  // ── Agent operations ────────────────────────────────────────────────────
+
+  /**
+   * submit: validate, apply idempotency and `supersedes`, check the flood cap, persist.
+   * `bodyBytes` is the size of the submitted document as received.
+   */
+  submit(
+    session: SessionRow,
+    doc: unknown,
+    bodyBytes: number,
+  ): { round_id: string; url: string; status: "pending" | Outcome; replay: boolean } {
+    if (bodyBytes > LIMITS.round_bytes) {
+      throw new HubError("too_large", `the Round is over ${LIMITS.round_bytes} bytes`, { limit: LIMITS.round_bytes, pointer: "" });
+    }
     const schema = doc && typeof doc === "object" && "schema" in doc ? doc.schema : undefined;
     if (typeof schema === "string" && /^hermes\.round\/v\d+$/.test(schema) && !SUPPORTED_SCHEMAS.includes(schema)) {
       throw new HubError("unsupported_schema", `unsupported schema ${schema}`, { supported: SUPPORTED_SCHEMAS });
     }
-    const errors = validateRound(doc);
-    if (errors.length) throw new HubError("invalid_round", "the Round does not match hermes.round/v1", { errors });
+    const schemaErrors = validateRound(doc);
+    if (schemaErrors.length) throw new HubError("invalid_round", "the Round does not match hermes.round/v1", { errors: schemaErrors });
     const round = doc as Round; // validated against the schema above
-    const unsupported = round.questions.flatMap((q, i) =>
-      q.kind === "single"
-        ? []
-        : [{ pointer: `/questions/${i}/kind`, message: `kind "${q.kind}" is not supported by this Hub build yet` }],
-    );
-    if (unsupported.length) throw new HubError("invalid_round", "unsupported Question kind", { errors: unsupported });
+    const errors = hubChecks(round);
+    if (errors.length) throw new HubError("invalid_round", "the Round failed the Hub's checks", { errors });
+    const oversized = oversizedAttachment(round);
+    if (oversized !== undefined) {
+      throw new HubError("too_large", `attachment ${oversized} is over ${LIMITS.attachment_bytes} bytes`, {
+        limit: LIMITS.attachment_bytes,
+        pointer: oversized,
+      });
+    }
+
+    const bodyHash = new Bun.CryptoHasher("sha256").update(canonicalJson(round)).digest("hex");
+    if (round.idempotency_key !== undefined) {
+      const existing = this.db
+        .query<RoundRow, [string, string]>("SELECT * FROM rounds WHERE session_id = ? AND idempotency_key = ?")
+        .get(session.id, round.idempotency_key);
+      if (existing) {
+        if (existing.body_hash !== bodyHash) {
+          throw new HubError("idempotency_conflict", "this idempotency_key was used with a different Round", {
+            round_id: existing.id,
+          });
+        }
+        return { round_id: existing.id, url: this.roundUrl(existing.id), status: existing.status, replay: true };
+      }
+    }
 
     const id = newId("r_");
-    const received_at = now();
-    this.db
-      .query("INSERT INTO rounds (id, session_id, status, round, received_at) VALUES (?, ?, 'pending', ?, ?)")
-      .run(id, session.id, JSON.stringify(round), received_at);
-    this.emit({
-      type: "round.created",
-      round: { id, received_at, session: { id: session.id, kind: session.kind, callsign: callsign(session) }, round },
-    });
-    return { round_id: id, url: `${this.baseUrl}/rounds/${id}`, status: "pending" };
+    const events: HubEvent[] = [];
+    this.db.transaction(() => {
+      let position = this.clock.now();
+      let draft: Draft | null = null;
+      if (round.supersedes !== undefined) {
+        const old = this.ownRound(session, round.supersedes);
+        if (old.status !== "pending") {
+          throw new HubError("round_ended", `Round ${old.id} has already ended; collect its Answer`, {
+            round_id: old.id,
+            outcome: old.status,
+          });
+        }
+        position = old.position;
+        draft = carryDraft(JSON.parse(old.round), parseDraft(old.draft), round);
+        events.push(this.end(old, "cancelled", { cancelled_by: "agent", superseded_by: id }));
+      }
+      const pending = this.db
+        .query<{ n: number; oldest: string | null }, [string]>(
+          `SELECT count(*) AS n, (SELECT id FROM rounds WHERE session_id = ?1 AND status = 'pending' ORDER BY received_at, rowid LIMIT 1) AS oldest
+           FROM rounds WHERE session_id = ?1 AND status = 'pending'`,
+        )
+        .get(session.id)!;
+      if (pending.n >= LIMITS.pending_per_session) {
+        throw new HubError("flood_cap", `this session already has ${pending.n} pending Rounds`, {
+          limit: LIMITS.pending_per_session,
+          oldest_round_id: pending.oldest,
+        });
+      }
+      const received_at = this.now();
+      this.db
+        .query(
+          `INSERT INTO rounds (id, session_id, status, round, received_at, position, idempotency_key, body_hash, draft)
+           VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(id, session.id, JSON.stringify(round), received_at, position, round.idempotency_key ?? null, bodyHash, draft && JSON.stringify(draft));
+      const insertDeadline = this.db.query("INSERT INTO question_deadlines (round_id, question_id, deadline) VALUES (?, ?, ?)");
+      for (const q of round.questions) {
+        const policy = effectivePolicy(round, q);
+        if (policy.on_timeout === "wait") continue;
+        insertDeadline.run(id, q.id, new Date(Date.parse(received_at) + policy.after_seconds * 1000).toISOString());
+      }
+      const view = this.view(id)!;
+      events.push(round.supersedes === undefined ? { type: "round.created", view } : { type: "round.superseded", replaces: round.supersedes, view });
+    })();
+    this.emit(events);
+    this.schedule();
+    return { round_id: id, url: this.roundUrl(id), status: "pending", replay: false };
   }
 
-  private ownRound(session: SessionRow, id: string): RoundRow {
-    const row = this.db
-      .query<RoundRow, [string, string]>("SELECT * FROM rounds WHERE id = ? AND session_id = ?")
-      .get(id, session.id);
-    if (!row) throw new HubError("not_found", `no Round ${id} for this session`);
-    return row;
-  }
-
-  /** get: pending status, or the Answer once ended. The first Answer returned marks delivery. */
+  /** get: pending status with the next deadline, or the Answer once ended. The first Answer returned marks delivery. */
   get(session: SessionRow, id: string): Answer | PendingStatus {
     const row = this.ownRound(session, id);
-    if (row.status === "pending") return { status: "pending", next_deadline: null };
-    if (!row.delivered_at) this.db.query("UPDATE rounds SET delivered_at = ? WHERE id = ?").run(now(), id);
-    return JSON.parse(row.answer!) as Answer;
+    if (row.status === "pending") return { status: "pending", next_deadline: this.nextDeadline(id) };
+    return this.deliver(row);
   }
 
   /** wait: like get, but holds until the Round ends or `seconds` pass. */
@@ -187,78 +304,252 @@ export class Engine {
     return promise;
   }
 
-  /** Pending Rounds for the Command Center, in arrival order. */
-  pending(): PendingRoundView[] {
-    return this.db
-      .query<RoundRow & { kind: string; session_key: string; label: string | null; cwd: string | null }, []>(
-        `SELECT r.*, s.kind, s.session_key, s.label, s.cwd FROM rounds r JOIN sessions s ON s.id = r.session_id
-         WHERE r.status = 'pending' ORDER BY r.received_at, r.rowid`,
-      )
-      .all()
-      .map((r) => ({
-        id: r.id,
-        received_at: r.received_at,
-        session: { id: r.session_id, kind: r.kind, callsign: callsign(r) },
-        round: JSON.parse(r.round) as Round,
-      }));
+  /** cancel: the Agent cancels its own pending Round. */
+  cancel(session: SessionRow, id: string): Answer {
+    const row = this.ownRound(session, id);
+    if (row.status !== "pending") {
+      throw new HubError("round_ended", `Round ${id} has already ended`, { round_id: id, outcome: row.status });
+    }
+    const event = this.db.transaction(() => this.end(row, "cancelled", { cancelled_by: "agent" }))();
+    this.emit([event]);
+    this.schedule();
+    return this.deliver(this.row(id)!);
   }
 
-  /** The Human sends a Round: outcome `answered`, delivered immediately, immutable. */
+  /** inbox: the session's ended, undelivered Answers, oldest first. Returning them marks delivery. */
+  inbox(session: SessionRow, limit: number): Answer[] {
+    return this.db
+      .query<RoundRow, [string, number]>(
+        `SELECT * FROM rounds WHERE session_id = ? AND status <> 'pending' AND delivered_at IS NULL
+         ORDER BY decided_at, rowid LIMIT ?`,
+      )
+      .all(session.id, limit)
+      .map((row) => this.deliver(row));
+  }
+
+  // ── Command Center (the Human) ──────────────────────────────────────────
+
+  /** The Feed: Pending Rounds and Rounds ended in place, in queue order. */
+  feed(): FeedRoundView[] {
+    return this.db
+      .query<{ id: string }, []>(
+        "SELECT id FROM rounds WHERE status = 'pending' OR feed_removed_at IS NULL ORDER BY position, rowid",
+      )
+      .all()
+      .map((r) => this.view(r.id)!);
+  }
+
+  saveDraft(id: string, draft: unknown): void {
+    if (!isDraft(draft)) throw new HubError("invalid_answer", "malformed Draft", { errors: validationIssues(isDraft.errors) });
+    this.pendingRow(id);
+    this.db.query("UPDATE rounds SET draft = ? WHERE id = ?").run(JSON.stringify(draft), id);
+    this.emit([{ type: "draft.saved", round_id: id, draft }]);
+  }
+
+  /** Send: every required open Question needs a value; Locked values stay. Immediate and immutable. */
   send(id: string, input: unknown): Answer {
     if (!isSendInput(input)) {
       throw new HubError("invalid_answer", "malformed send request", { errors: validationIssues(isSendInput.errors) });
     }
-    const row = this.db.query<RoundRow, [string]>("SELECT * FROM rounds WHERE id = ?").get(id);
-    if (!row) throw new HubError("not_found", `no Round ${id}`);
-    if (row.status !== "pending") {
-      throw new HubError("round_ended", `Round ${id} has already ended`, { round_id: id, outcome: row.status });
-    }
-    const round = JSON.parse(row.round) as Round;
+    const row = this.pendingRow(id);
+    const round: Round = JSON.parse(row.round);
+    const locks: Locks = JSON.parse(row.locks);
     const known = new Set(round.questions.map((q) => q.id));
     const errors = Object.keys(input.questions)
       .filter((qid) => !known.has(qid))
       .map((qid) => ({ pointer: `/questions/${qid}`, message: "unknown Question" }));
-
-    const questions: Record<string, QuestionAnswer> = {};
+    const human: Record<string, { value: QuestionValue; note?: string }> = {};
     for (const q of round.questions) {
+      if (locks[q.id]) continue;
       const given = input.questions[q.id];
-      if (given === undefined || given.value === null) {
-        if (q.required !== false) errors.push({ pointer: `/questions/${q.id}`, message: "required" });
-        questions[q.id] = { value: null, set_by: "none" };
+      const value = parseHumanValue(q, given?.value);
+      if (typeof value === "string") {
+        errors.push({ pointer: `/questions/${q.id}/value`, message: value });
         continue;
       }
-      const value = q.kind === "single" ? singleValue(q, given.value) : undefined;
-      if (!value) {
-        errors.push({ pointer: `/questions/${q.id}/value`, message: "not a valid choice" });
-        continue;
-      }
-      questions[q.id] = { value, set_by: "human", ...(given.note ? { note: given.note } : {}) };
+      if (value === null && q.required !== false) errors.push({ pointer: `/questions/${q.id}`, message: "required" });
+      human[q.id] = { value, ...(given?.note ? { note: given.note } : {}) };
     }
     if (errors.length) throw new HubError("invalid_answer", "the Answer is incomplete or invalid", { errors });
+    return this.humanEnd(row, "answered", { ...(input.note ? { note: input.note } : {}) }, human, true);
+  }
 
+  dismiss(id: string, input: unknown): Answer {
+    if (!isDismissInput(input)) throw new HubError("invalid_answer", "malformed dismiss request");
+    return this.humanEnd(this.pendingRow(id), "dismissed", input.note ? { note: input.note } : {});
+  }
+
+  redirect(id: string, input: unknown): Answer {
+    if (!isRedirectInput(input)) throw new HubError("invalid_answer", "Redirect needs a message");
+    return this.humanEnd(this.pendingRow(id), "redirected", { message: input.message, ...(input.note ? { note: input.note } : {}) });
+  }
+
+  /** Remove an ended-in-place Round from the Feed (it stays in the log). */
+  removeFromFeed(id: string): void {
+    const row = this.row(id);
+    if (!row) throw new HubError("not_found", `no Round ${id}`);
+    if (row.status === "pending") throw new HubError("round_pending", `Round ${id} is still pending`);
+    this.db.query("UPDATE rounds SET feed_removed_at = coalesce(feed_removed_at, ?) WHERE id = ?").run(this.now(), id);
+    this.emit([{ type: "round.removed", round_id: id }]);
+  }
+
+  // ── Policies ────────────────────────────────────────────────────────────
+
+  /**
+   * Locks every Question whose deadline has passed, in deadline order, and expires Rounds left with
+   * no open Question. Strict: a policy never waits for, nor sends, the Human's Draft.
+   */
+  fireDue(): void {
+    const events: HubEvent[] = [];
+    this.db.transaction(() => {
+      const due = this.db
+        .query<{ round_id: string; question_id: string }, [string]>(
+          `SELECT d.round_id, d.question_id FROM question_deadlines d JOIN rounds r ON r.id = d.round_id
+           WHERE r.status = 'pending' AND d.deadline <= ? ORDER BY d.deadline, d.rowid`,
+        )
+        .all(this.now());
+      for (const { round_id, question_id } of due) {
+        const row = this.row(round_id)!;
+        if (row.status !== "pending") continue; // expired earlier in this batch
+        const round: Round = JSON.parse(row.round);
+        const locks: Locks = JSON.parse(row.locks);
+        const q = round.questions.find((x) => x.id === question_id)!;
+        locks[q.id] = { value: lockValue(q, effectivePolicy(round, q)), locked_at: this.now() };
+        this.db.query("UPDATE rounds SET locks = ? WHERE id = ?").run(JSON.stringify(locks), round_id);
+        this.db.query("DELETE FROM question_deadlines WHERE round_id = ? AND question_id = ?").run(round_id, question_id);
+        const open = round.questions.some((x) => !locks[x.id]);
+        events.push(open ? { type: "round.locked", view: this.view(round_id)! } : this.end(this.row(round_id)!, "expired", {}));
+      }
+    })();
+    this.emit(events);
+    this.schedule();
+  }
+
+  private schedule(): void {
+    clearTimeout(this.timer);
+    const next = this.db
+      .query<{ deadline: string }, []>(
+        `SELECT min(d.deadline) AS deadline FROM question_deadlines d JOIN rounds r ON r.id = d.round_id WHERE r.status = 'pending'`,
+      )
+      .get()?.deadline;
+    if (!next) return;
+    const delay = Math.min(Math.max(0, Date.parse(next) - this.clock.now()), MAX_TIMER_MS);
+    this.timer = setTimeout(() => this.fireDue(), delay);
+  }
+
+  // ── Internals ───────────────────────────────────────────────────────────
+
+  private roundUrl(id: string): string {
+    return `${this.baseUrl}/rounds/${id}`;
+  }
+
+  private row(id: string): RoundRow | null {
+    return this.db.query<RoundRow, [string]>("SELECT * FROM rounds WHERE id = ?").get(id);
+  }
+
+  private ownRound(session: SessionRow, id: string): RoundRow {
+    const row = this.row(id);
+    if (!row || row.session_id !== session.id) throw new HubError("not_found", `no Round ${id} for this session`);
+    return row;
+  }
+
+  private pendingRow(id: string): RoundRow {
+    const row = this.row(id);
+    if (!row) throw new HubError("not_found", `no Round ${id}`);
+    if (row.status !== "pending") {
+      throw new HubError("round_ended", `Round ${id} has already ended`, { round_id: id, outcome: row.status });
+    }
+    return row;
+  }
+
+  private nextDeadline(id: string): string | null {
+    return (
+      this.db.query<{ d: string | null }, [string]>("SELECT min(deadline) AS d FROM question_deadlines WHERE round_id = ?").get(id)?.d ??
+      null
+    );
+  }
+
+  private deliver(row: RoundRow): Answer {
+    if (!row.delivered_at) this.db.query("UPDATE rounds SET delivered_at = ? WHERE id = ?").run(this.now(), row.id);
+    return JSON.parse(row.answer!);
+  }
+
+  private humanEnd(
+    row: RoundRow,
+    outcome: "answered" | "dismissed" | "redirected",
+    extras: Partial<Answer>,
+    human?: Record<string, { value: QuestionValue; note?: string }>,
+    clearDraft = false,
+  ): Answer {
+    const event = this.db.transaction(() => {
+      if (clearDraft) this.db.query("UPDATE rounds SET draft = NULL WHERE id = ?").run(row.id);
+      return this.end(row, outcome, extras, human);
+    })();
+    this.emit([event]);
+    this.schedule();
+    return event.answer;
+  }
+
+  /** Ends a pending Round with exactly one Outcome. Call inside a transaction; emit the event after it commits. */
+  private end(
+    row: RoundRow,
+    outcome: Outcome,
+    extras: Partial<Answer>,
+    human?: Record<string, { value: QuestionValue; note?: string }>,
+  ): Extract<HubEvent, { type: "round.ended" }> {
+    const round: Round = JSON.parse(row.round);
+    const decided_at = this.now();
     const answer: Answer = {
       schema: "hermes.answer/v1",
-      round_id: id,
-      outcome: "answered",
-      ...(input.note ? { note: input.note } : {}),
-      questions,
-      decided_at: now(),
+      round_id: row.id,
+      outcome,
+      ...extras,
+      questions: answerQuestions(round, JSON.parse(row.locks), human),
+      decided_at,
     };
+    const removed = LEAVES_FEED[outcome] ? decided_at : null;
     this.db
-      .query("UPDATE rounds SET status = 'answered', answer = ?, decided_at = ? WHERE id = ? AND status = 'pending'")
-      .run(JSON.stringify(answer), answer.decided_at, id);
-    this.emit({ type: "round.ended", round_id: id, answer });
-    return answer;
+      .query("UPDATE rounds SET status = ?, answer = ?, decided_at = ?, feed_removed_at = ? WHERE id = ? AND status = 'pending'")
+      .run(outcome, JSON.stringify(answer), decided_at, removed, row.id);
+    this.db.query("DELETE FROM question_deadlines WHERE round_id = ?").run(row.id);
+    return { type: "round.ended", round_id: row.id, answer, view: removed ? null : this.view(row.id) };
+  }
+
+  private view(id: string): FeedRoundView | null {
+    const r = this.db
+      .query<RoundRow & { kind: string; session_key: string; label: string | null; cwd: string | null }, [string]>(
+        "SELECT r.*, s.kind, s.session_key, s.label, s.cwd FROM rounds r JOIN sessions s ON s.id = r.session_id WHERE r.id = ?",
+      )
+      .get(id);
+    if (!r) return null;
+    const deadlines = this.db
+      .query<{ question_id: string; deadline: string }, [string]>("SELECT question_id, deadline FROM question_deadlines WHERE round_id = ?")
+      .all(id);
+    return {
+      id: r.id,
+      status: r.status,
+      position: r.position,
+      received_at: r.received_at,
+      session: { id: r.session_id, kind: r.kind, callsign: callsign(r) },
+      round: JSON.parse(r.round),
+      locks: JSON.parse(r.locks),
+      deadlines: Object.fromEntries(deadlines.map((d) => [d.question_id, d.deadline])),
+      draft: parseDraft(r.draft),
+      answer: r.answer ? JSON.parse(r.answer) : null,
+    };
   }
 }
 
-function singleValue(q: SingleQuestion, value: unknown): QuestionValue | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  if ("selected" in value && typeof value.selected === "string" && q.options.some((o) => o.id === value.selected)) {
-    return { selected: value.selected };
-  }
-  if (q.allow_other && "other" in value && typeof value.other === "string" && value.other.trim()) {
-    return { other: value.other };
-  }
-  return undefined;
+function parseDraft(text: string | null): Draft | null {
+  return text ? JSON.parse(text) : null;
+}
+
+/** On Supersede, the Draft carries over for Questions whose id and kind match. */
+function carryDraft(oldRound: Round, draft: Draft | null, next: Round): Draft | null {
+  if (!draft?.questions) return null;
+  const oldKinds = new Map(oldRound.questions.map((q) => [q.id, q.kind]));
+  const questions = Object.fromEntries(
+    next.questions.filter((q) => oldKinds.get(q.id) === q.kind && draft.questions![q.id]).map((q) => [q.id, draft.questions![q.id]!]),
+  );
+  return Object.keys(questions).length ? { questions } : null;
 }

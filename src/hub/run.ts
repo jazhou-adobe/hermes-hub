@@ -1,13 +1,13 @@
 import { rmSync, writeFileSync } from "node:fs";
 import { loadConfig } from "../config.ts";
 import { migrationStatus, openDb } from "../db/db.ts";
-import { CLONE_ROOT, dbPath, hubJsonPath } from "../paths.ts";
+import { dbPath, hubJsonPath } from "../paths.ts";
 import { VERSION } from "../version.ts";
 import { Engine } from "./engine.ts";
 import { startServer } from "./server.ts";
 
-/** `hermes hub`: refuses while migrations are pending, then serves until SIGINT/SIGTERM. */
-export function runHub(): number | undefined {
+/** `hermes hub`: refuses while migrations are pending, fires overdue policies, then serves until SIGINT/SIGTERM. */
+export async function runHub(): Promise<number | undefined> {
   const db = openDb(dbPath());
   const status = migrationStatus(db);
   if (status.current > status.latest) {
@@ -21,10 +21,10 @@ export function runHub(): number | undefined {
 
   const { port } = loadConfig();
   const url = `http://127.0.0.1:${port}`;
-  const hubJson = hubJsonPath(); // resolved before chdir: HERMES_HOME may be relative
-  // Bun resolves the HTML import's bundled asset URLs against the cwd; serve from the clone.
-  process.chdir(CLONE_ROOT);
-  const server = startServer(new Engine(db, url), port);
+  const hubJson = hubJsonPath(); // resolved before the server may chdir: HERMES_HOME may be relative
+  const engine = new Engine(db, url);
+  engine.start();
+  const server = await startServer(engine, port);
   writeFileSync(
     hubJson,
     `${JSON.stringify({ url, version: VERSION, pid: process.pid, started_at: new Date().toISOString() }, null, 2)}\n`,
@@ -32,6 +32,7 @@ export function runHub(): number | undefined {
 
   const stop = () => {
     rmSync(hubJson, { force: true });
+    engine.stop();
     void server.stop(true);
     db.close();
     process.exit(0);
