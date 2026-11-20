@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from "react";
-import type { HubEvent, PendingRoundView } from "../../src/hub/engine.ts";
-import { pendingRounds } from "./api.ts";
+import type { FeedRoundView, HubEvent } from "../../src/hub/engine.ts";
+import { feedRounds } from "./api.ts";
 
 export interface State {
-  rounds: PendingRoundView[];
+  rounds: FeedRoundView[];
   connection: "connecting" | "live" | "lost";
 }
 
@@ -25,23 +25,39 @@ export function useStore<T>(select: (s: State) => T): T {
   return useSyncExternalStore(subscribe, () => select(state));
 }
 
+function upsert(view: FeedRoundView): FeedRoundView[] {
+  const rest = state.rounds.filter((r) => r.id !== view.id);
+  return view.status === "pending" || view.answer === null ? [...rest, view] : rest;
+}
+
 /** Snapshot on every (re)connect, then patch in place from the Human-scoped SSE stream. */
 export function connect(): void {
   const events = new EventSource("/cc/events");
   events.addEventListener("hello", async () => {
     try {
-      set({ rounds: await pendingRounds(), connection: "live" });
+      set({ rounds: await feedRounds(), connection: "live" });
     } catch {
       set({ connection: "lost" });
     }
   });
-  events.addEventListener("round.created", (e) => {
-    const event: Extract<HubEvent, { type: "round.created" }> = JSON.parse(e.data);
-    if (!state.rounds.some((r) => r.id === event.round.id)) set({ rounds: [...state.rounds, event.round] });
-  });
+  const onView = (e: MessageEvent) => {
+    const event: Extract<HubEvent, { view: FeedRoundView }> = JSON.parse(e.data);
+    set({ rounds: upsert(event.view) });
+  };
+  events.addEventListener("round.created", onView);
+  events.addEventListener("round.locked", onView);
+  events.addEventListener("round.superseded", onView);
   events.addEventListener("round.ended", (e) => {
     const event: Extract<HubEvent, { type: "round.ended" }> = JSON.parse(e.data);
+    set({ rounds: event.view ? upsert(event.view) : state.rounds.filter((r) => r.id !== event.round_id) });
+  });
+  events.addEventListener("round.removed", (e) => {
+    const event: Extract<HubEvent, { type: "round.removed" }> = JSON.parse(e.data);
     set({ rounds: state.rounds.filter((r) => r.id !== event.round_id) });
+  });
+  events.addEventListener("draft.saved", (e) => {
+    const event: Extract<HubEvent, { type: "draft.saved" }> = JSON.parse(e.data);
+    set({ rounds: state.rounds.map((r) => (r.id === event.round_id ? { ...r, draft: event.draft } : r)) });
   });
   events.onerror = () => set({ connection: "lost" });
 }

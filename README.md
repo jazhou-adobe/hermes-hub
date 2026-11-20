@@ -2,7 +2,7 @@
 
 A local human-in-the-loop Command Center. AI Agents on your Mac (Claude Code, Codex, Cursor, VS Code Copilot, omp, scripts) send **Rounds** of **Questions** to the **Hub**. One **Human** answers them all from a single **Command Center** in the browser, and each Answer flows back to the Agent that asked.
 
-**Status: Phase 1 in progress.** The walking skeleton works: single-choice Rounds from the CLI, answered in a bare Command Center page.
+**Status: Phase 1 in progress.** All Question kinds, Locks, Drafts, dismiss/redirect, supersede, cancel, inbox and the browser guard now work.
 
 ## Run it
 
@@ -15,13 +15,16 @@ hermes migrate      # creates .hermes/hub.db
 hermes hub          # http://127.0.0.1:4747 (port: `port = …` in .hermes/config.toml)
 ```
 
-Ask from any shell; the Answer prints as one `ANSWER {…}` line when the Human sends it:
+Ask from any shell; the Answer prints as one `ANSWER {…}` line when the Human sends, dismisses or redirects it:
 
 ```bash
-hermes ask round.json --out answer.json    # round.json: a hermes.round/v1 document
+hermes ask round.json --out answer.json --supersedes <round-id>   # round.json: a hermes.round/v1 document
+hermes wait <round-id>
+hermes cancel <round-id>
+hermes inbox --format json
 ```
 
-`bun test` runs the end-to-end check.
+`bun test` runs the lifecycle, HTTP/guard and end-to-end checks.
 
 ## Project
 

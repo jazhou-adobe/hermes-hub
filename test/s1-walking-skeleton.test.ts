@@ -137,7 +137,7 @@ describe("walking skeleton", () => {
     expect(JSON.parse(readFileSync(outFile, "utf8"))).toEqual(answer);
   });
 
-  test("a Question kind this build cannot answer is rejected with exit 4", async () => {
+  test("an invalid Round (e.g. a single Question with only one option) is rejected with exit 4", async () => {
     const box = sandbox();
     cleanups.push(() => rmSync(box.home, { recursive: true, force: true }));
     await run(box.env, "migrate");
@@ -145,7 +145,7 @@ describe("walking skeleton", () => {
     const roundFile = join(box.home, "round.json");
     writeFileSync(
       roundFile,
-      JSON.stringify({ ...ROUND, questions: [{ id: "why", kind: "text", prompt: "Why?" }] }),
+      JSON.stringify({ ...ROUND, questions: [{ id: "q", kind: "single", prompt: "?", options: [{ id: "a", label: "A" }] }] }),
     );
     const ask = await run(box.env, "ask", roundFile);
     expect(ask.code).toBe(4);

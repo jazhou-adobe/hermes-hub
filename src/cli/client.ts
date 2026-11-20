@@ -24,6 +24,8 @@ export class HubClient {
         headers: {
           ...(body === undefined ? {} : { "Content-Type": "application/json" }),
           ...(this.token ? { "Hermes-Session": this.token } : {}),
+          // Advisor runs may not ask (delegation spec); the Hub refuses them by this header.
+          ...(process.env.HERMES_ADVISOR ? { "Hermes-Advisor": process.env.HERMES_ADVISOR } : {}),
         },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
@@ -54,12 +56,28 @@ export class HubClient {
     this.token = res.token;
   }
 
-  async submit(round: unknown): Promise<{ round_id: string; url: string }> {
+  async submit(round: unknown, supersedes?: string): Promise<{ round_id: string; url: string }> {
+    if (supersedes !== undefined) {
+      if (typeof round !== "object" || round === null || Array.isArray(round)) {
+        throw new HubError("invalid_round", "the Round must be a JSON object");
+      }
+      round = { ...round, supersedes };
+    }
     const res = await this.request("POST", "/v1/rounds", round);
     if (typeof res.round_id !== "string" || typeof res.url !== "string") {
       throw new HubError("internal", "submit response without round_id and url");
     }
     return { round_id: res.round_id, url: res.url };
+  }
+
+  async cancel(roundId: string): Promise<Answer> {
+    return asAnswer(await this.request("POST", `/v1/rounds/${encodeURIComponent(roundId)}/cancel`, {}));
+  }
+
+  async inbox(limit = 50): Promise<Answer[]> {
+    const res = await this.request("GET", `/v1/inbox?limit=${limit}`);
+    if (!Array.isArray(res.answers)) throw new HubError("internal", "inbox response without answers");
+    return res.answers.map(asAnswer);
   }
 
   /**
@@ -83,10 +101,13 @@ export class HubClient {
       }
       unreachableSince = undefined;
       backoffMs = 500;
-      if (res.status === "pending") continue;
-      const issues = validateAnswer(res);
-      if (issues.length) throw new HubError("internal", `the Hub returned an invalid Answer: ${JSON.stringify(issues)}`);
-      return res as unknown as Answer; // validated against hermes.answer/v1 above
+      if (res.status !== "pending") return asAnswer(res);
     }
   }
+}
+
+function asAnswer(doc: unknown): Answer {
+  const issues = validateAnswer(doc);
+  if (issues.length) throw new HubError("internal", `the Hub returned an invalid Answer: ${JSON.stringify(issues)}`);
+  return doc as Answer; // validated against hermes.answer/v1 above
 }
