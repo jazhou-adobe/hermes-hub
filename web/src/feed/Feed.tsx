@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { FeedRoundView } from "../../../src/hub/engine.ts";
-import type { Answer, Outcome, Question } from "../../../src/schema/types.ts";
+import type { Answer, Outcome, Question, QuestionValue } from "../../../src/schema/types.ts";
 import type { Draft } from "../../../src/schema/validate.ts";
-import { dismissRound, redirectRound, removeFromFeed, saveDraft, sendRound } from "../api.ts";
+import { advisorNames, askAdvisor, cancelAdvisor, dismissRound, redirectRound, removeFromFeed, saveDraft, sendRound } from "../api.ts";
 import { useStore } from "../store.ts";
 
 const DRAFT_DEBOUNCE_MS = 500;
@@ -19,6 +19,12 @@ const OUTCOME_SENTENCE: Record<Outcome, string> = {
 export function Feed() {
   const rounds = useStore((s) => s.rounds);
   const connection = useStore((s) => s.connection);
+  const [advisors, setAdvisors] = useState<string[]>([]);
+  useEffect(() => {
+    void advisorNames()
+      .then(setAdvisors)
+      .catch(() => {});
+  }, []);
   return (
     <main>
       <header className="bar">
@@ -29,19 +35,20 @@ export function Feed() {
       </header>
       {rounds.length === 0 ? <p className="empty">No pending Rounds.</p> : null}
       {rounds.map((view) => (
-        <RoundCard key={view.id} view={view} />
+        <RoundCard key={view.id} view={view} advisors={advisors} />
       ))}
     </main>
   );
 }
 
-function RoundCard({ view }: { view: FeedRoundView }) {
-  return view.status === "pending" ? <PendingCard view={view} /> : <EndedCard view={view} />;
+function RoundCard({ view, advisors }: { view: FeedRoundView; advisors: string[] }) {
+  return view.status === "pending" ? <PendingCard view={view} advisors={advisors} /> : <EndedCard view={view} />;
 }
 
 function EndedCard({ view }: { view: FeedRoundView }) {
   const [removing, setRemoving] = useState(false);
   const answer = view.answer as Answer;
+  const lastRun = view.advisor_runs[0];
   return (
     <section className="round ended" aria-labelledby={`round-${view.id}-title`}>
       <h2 id={`round-${view.id}-title`}>{view.round.title}</h2>
@@ -54,6 +61,11 @@ function EndedCard({ view }: { view: FeedRoundView }) {
           </>
         ) : null}
       </p>
+      {lastRun ? (
+        <p className="advisor-history">
+          Advisor: {lastRun.advisor_name} ({lastRun.status})
+        </p>
+      ) : null}
       {view.draft ? (
         <p className="draft-kept">
           Not sent
@@ -69,18 +81,43 @@ function EndedCard({ view }: { view: FeedRoundView }) {
   );
 }
 
-function PendingCard({ view }: { view: FeedRoundView }) {
+function PendingCard({ view, advisors }: { view: FeedRoundView; advisors: string[] }) {
   const { round, locks } = view;
   const draft = view.draft;
+  const suggestion = view.suggestion;
   const [values, setValues] = useState<Record<string, unknown>>(() => draftValues(draft));
   const [note, setNote] = useState(draft?.note ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showRedirect, setShowRedirect] = useState(false);
   const [redirectMessage, setRedirectMessage] = useState(draft?.message ?? "");
+  const [suggestedFilled, setSuggestedFilled] = useState<Set<string>>(new Set());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const mergedRunRef = useRef<string | undefined>(undefined);
 
   useEffect(() => () => clearTimeout(debounceRef.current), []);
+
+  // Delegation (Advisors): once a run ends with a valid Suggestion, fill still-empty, open Questions.
+  const latestRun = view.advisor_runs[0];
+  useEffect(() => {
+    if (!latestRun || latestRun.status === "running" || !latestRun.suggestion) return;
+    if (mergedRunRef.current === latestRun.id) return;
+    mergedRunRef.current = latestRun.id;
+    const filled = new Set<string>();
+    setValues((prev) => {
+      const next = { ...prev };
+      for (const [qid, s] of Object.entries(latestRun.suggestion!.questions)) {
+        if (locks[qid]) continue;
+        const q = round.questions.find((x) => x.id === qid);
+        if (!q || isAnswered(q, next[qid])) continue;
+        next[qid] = s.value;
+        filled.add(qid);
+      }
+      return filled.size ? next : prev;
+    });
+    if (filled.size) setSuggestedFilled((prev) => new Set([...prev, ...filled]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latestRun?.id, latestRun?.status]);
 
   function scheduleDraftSave(nextValues: Record<string, unknown>, nextNote: string, nextMessage: string) {
     clearTimeout(debounceRef.current);
@@ -93,6 +130,13 @@ function PendingCard({ view }: { view: FeedRoundView }) {
   function setValue(id: string, value: unknown) {
     const next = { ...values, [id]: value };
     setValues(next);
+    if (suggestedFilled.has(id)) {
+      setSuggestedFilled((prev) => {
+        const rest = new Set(prev);
+        rest.delete(id);
+        return rest;
+      });
+    }
     scheduleDraftSave(next, note, redirectMessage);
   }
 
@@ -141,9 +185,12 @@ function PendingCard({ view }: { view: FeedRoundView }) {
         </ul>
       ) : null}
 
+      <AdvisorSection view={view} advisors={advisors} />
+
       {round.questions.map((q) => {
         const lock = locks[q.id];
         const deadline = view.deadlines[q.id];
+        const suggested = suggestion?.questions[q.id];
         return (
           <QuestionField
             key={q.id}
@@ -152,6 +199,8 @@ function PendingCard({ view }: { view: FeedRoundView }) {
             lockDeadline={deadline}
             value={values[q.id]}
             onChange={(value) => setValue(q.id, value)}
+            suggestion={suggested ? { advisor: suggestion!.advisor, value: suggested.value, rationale: suggested.rationale } : undefined}
+            autoFilled={suggestedFilled.has(q.id)}
           />
         );
       })}
@@ -210,6 +259,93 @@ function PendingCard({ view }: { view: FeedRoundView }) {
   );
 }
 
+/** Ask advisor / cancel / "Advisor working · m:ss" / unparsed briefing (delegation spec). */
+function AdvisorSection({ view, advisors }: { view: FeedRoundView; advisors: string[] }) {
+  const run = view.advisor_runs[0];
+  const running = run?.status === "running";
+  const [advisor, setAdvisor] = useState(advisors[0] ?? "");
+  const [brief, setBrief] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!advisor && advisors.length) setAdvisor(advisors[0]!);
+  }, [advisors, advisor]);
+
+  useEffect(() => {
+    if (!running || !run) return;
+    const startedAt = Date.parse(run.started_at);
+    const tick = () => setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [running, run?.id, run?.started_at]);
+
+  async function start() {
+    if (!advisor) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await askAdvisor(view.id, { advisor, ...(brief.trim() ? { brief } : {}) });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancel() {
+    setBusy(true);
+    setError(null);
+    try {
+      await cancelAdvisor(view.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!running && advisors.length === 0 && !run) return null;
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+
+  return (
+    <div className="advisor">
+      {running ? (
+        <p className="advisor-status">
+          Advisor working · {minutes}:{String(seconds).padStart(2, "0")}
+          <button type="button" disabled={busy} onClick={cancel}>
+            Cancel
+          </button>
+        </p>
+      ) : advisors.length > 0 ? (
+        <div className="advisor-ask">
+          <select value={advisor} onChange={(e) => setAdvisor(e.target.value)}>
+            {advisors.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <input type="text" placeholder="Brief (optional)" value={brief} onChange={(e) => setBrief(e.target.value)} />
+          <button type="button" disabled={busy || !advisor} onClick={start}>
+            Ask advisor
+          </button>
+        </div>
+      ) : null}
+      {run && run.status === "failed" && !run.suggestion ? (
+        <div className="advisor-unparsed">
+          <p>Unparsed briefing from {run.advisor_name}:</p>
+          <pre>{run.raw_output}</pre>
+        </div>
+      ) : null}
+      {error ? <p role="alert">{error}</p> : null}
+    </div>
+  );
+}
+
 function draftValues(draft: Draft | null): Record<string, unknown> {
   if (!draft?.questions) return {};
   return Object.fromEntries(Object.entries(draft.questions).map(([id, q]) => [id, q.value]));
@@ -224,6 +360,24 @@ function isAnswered(_q: Question, value: unknown): boolean {
   return false;
 }
 
+function sameValue(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** A short, human-readable rendering of a Suggestion's value, for the inline "ADVISOR suggests …" line. */
+function describeSuggestedValue(q: Question, value: QuestionValue): string {
+  if (value === null) return "nothing";
+  if ("selected" in value) {
+    const ids = Array.isArray(value.selected) ? value.selected : [value.selected];
+    const labels = q.kind === "single" || q.kind === "multi" ? ids.map((id) => q.options.find((o) => o.id === id)?.label ?? id) : ids;
+    return labels.join(", ");
+  }
+  if ("other" in value) return value.other;
+  if ("text" in value) return value.text.length > 60 ? `${value.text.slice(0, 60)}…` : value.text;
+  if ("decision" in value) return value.decision;
+  return "";
+}
+
 function lockedSentence(lock: { at: string }, recommended: boolean): string {
   const time = new Date(lock.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return `Policy ${recommended ? "applied recommended" : "cancelled"} · ${time}`;
@@ -235,9 +389,14 @@ function QuestionField(props: {
   lockDeadline?: string;
   value: unknown;
   onChange: (value: unknown) => void;
+  /** This Question's current Suggestion, if any (delegation spec). */
+  suggestion?: { advisor: string; value: QuestionValue; rationale?: string };
+  /** Set while this Question's value was filled by the merge and not yet touched by the Human. */
+  autoFilled: boolean;
 }) {
-  const { question: q, locked, value, onChange } = props;
+  const { question: q, locked, value, onChange, suggestion, autoFilled } = props;
   const disabled = locked !== undefined;
+  const showAccept = !disabled && !autoFilled && suggestion !== undefined && isAnswered(q, value) && !sameValue(value, suggestion.value);
   return (
     <fieldset disabled={disabled} className={disabled ? "locked" : undefined}>
       <legend>
@@ -246,6 +405,21 @@ function QuestionField(props: {
       </legend>
       {q.detail ? <p className="detail">{q.detail}</p> : null}
       {locked ? <p className="lock-note">{lockedSentence(locked, hasApplyRecommendedLock(q, value))}</p> : null}
+      {!disabled && autoFilled && suggestion ? (
+        <p className="suggested-note">
+          Suggested by {suggestion.advisor}
+          {suggestion.rationale ? ` — ${suggestion.rationale}` : ""}
+        </p>
+      ) : null}
+      {showAccept ? (
+        <p className="suggested-accept">
+          {suggestion!.advisor} suggests {describeSuggestedValue(q, suggestion!.value)}
+          {suggestion!.rationale ? ` (${suggestion!.rationale})` : ""}
+          <button type="button" onClick={() => onChange(suggestion!.value)}>
+            Accept
+          </button>
+        </p>
+      ) : null}
       {q.kind === "single" || q.kind === "multi" ? (
         <ChoiceOptions question={q} value={value} onChange={onChange} />
       ) : q.kind === "text" ? (

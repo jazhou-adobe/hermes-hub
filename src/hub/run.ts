@@ -19,10 +19,10 @@ export async function runHub(): Promise<number | undefined> {
     return 1;
   }
 
-  const { port } = loadConfig();
+  const { port, advisors, autoAsk } = loadConfig();
   const url = `http://127.0.0.1:${port}`;
   const hubJson = hubJsonPath(); // resolved before the server may chdir: HERMES_HOME may be relative
-  const engine = new Engine(db, url);
+  const engine = new Engine(db, url, undefined, { advisors, autoAsk });
   engine.start();
   const server = await startServer(engine, port);
   writeFileSync(
