@@ -1,0 +1,71 @@
+/* Bare functional styling for the walking skeleton; the design system replaces it in S4. */
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+  line-height: 1.45;
+}
+body {
+  margin: 0 auto;
+  max-width: 46rem;
+  padding: 1rem;
+}
+.bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.status-live {
+  color: green;
+}
+.status-lost {
+  color: crimson;
+}
+.round {
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 0.5rem;
+  margin-block: 1rem;
+  padding: 0.75rem 1rem;
+}
+.round h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.meta {
+  margin: 0.15rem 0 0.5rem;
+  opacity: 0.7;
+  font-size: 0.9rem;
+}
+.context {
+  white-space: pre-wrap;
+}
+fieldset {
+  border: 0;
+  margin: 0.5rem 0;
+  padding: 0;
+}
+legend {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+.option {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
+}
+.option small {
+  display: block;
+  opacity: 0.75;
+}
+.recommended {
+  font-size: 0.8rem;
+  margin-left: 0.4rem;
+  opacity: 0.8;
+}
+.note {
+  display: grid;
+  gap: 0.25rem;
+  margin-block: 0.5rem;
+}
+[role="alert"] {
+  color: crimson;
+}
