@@ -126,3 +126,53 @@ html[data-outline] .x-add { outline: 2px dashed #d0007a; outline-offset: 2px; }
 
 /* Leave room for the floating prototype switcher under the Answer bar. */
 .proto-main .hh-round:has(> .hh-round-body) { max-height: calc(100dvh - var(--round-top, 8rem) - 4.5rem); }
+
+/* ---------- Lock soon (all variants): next deadline under 60 s. Word + dashed warning frame, never colour alone. ---------- */
+.proto-lock-soon {
+  display: inline-flex; align-items: center; gap: var(--hh-space-1); padding: 0 var(--hh-space-1);
+  border: var(--hh-border-width-thick) dashed var(--hh-warning-foreground); border-radius: var(--hh-radius-sm);
+  background: var(--hh-warning); color: var(--hh-warning-foreground);
+  font-family: var(--hh-type-label-family); font-size: var(--hh-type-mono-sm-size); font-weight: var(--hh-font-weight-heavy);
+  letter-spacing: var(--hh-letter-spacing-caps); text-transform: uppercase; white-space: nowrap;
+}
+.hh-strip[data-lock-soon='true']:not([data-selected]) { outline: var(--hh-border-width-thick) dashed var(--hh-warning); outline-offset: var(--hh-focus-ring-offset); }
+.hh-strip[data-lock-soon='true'][data-selected] { box-shadow: 0 0 0 calc(var(--hh-focus-ring-offset) + var(--hh-focus-ring-width) + var(--hh-border-width-thick)) var(--hh-warning); }
+
+/* ---------- Variant: bay-page — the open Round flows with the page; bay sticky; Answer bar sticky ---------- */
+.proto-shell[data-variant='bay-page'] .hh-command-panel > .hh-round { position: static; max-height: none; }
+.proto-shell[data-variant='bay-page'] .hh-strip-bay {
+  position: sticky; top: calc(var(--hh-button-min-target) + var(--hh-space-6));
+  max-height: calc(100dvh - var(--hh-button-min-target) - var(--hh-space-6) - 5rem); overflow-y: auto;
+}
+.proto-shell[data-variant='bay-page'] .hh-round-body,
+.proto-shell[data-variant='feed'] .hh-round-body { overflow: visible; }
+.proto-shell[data-variant='bay-page'] .hh-attachment-body,
+.proto-shell[data-variant='feed'] .hh-attachment-body,
+.proto-shell[data-variant='bay-page'] .proto-md,
+.proto-shell[data-variant='feed'] .proto-md { max-height: none; overflow-y: visible; }
+.proto-shell[data-variant='bay-page'] .hh-answer-bar,
+.proto-shell[data-variant='feed'] .proto-feed-item[data-in-view='true'] .hh-answer-bar { position: sticky; bottom: 4.25rem; z-index: var(--hh-layer-raised); }
+.proto-diff-fold { list-style: none; padding: var(--hh-space-1) var(--hh-space-2); }
+
+/* ---------- Variant: feed — every pending Round expanded in one column, slim sticky index ---------- */
+.proto-shell[data-variant='feed'] .proto-main .hh-round { position: static; max-height: none; }
+.proto-feed-wrap { display: grid; grid-template-columns: minmax(13rem, 17rem) minmax(0, 1fr); gap: var(--hh-density-gap); align-items: start; }
+.proto-feed-index {
+  position: sticky; top: calc(var(--hh-button-min-target) + var(--hh-space-6));
+  max-height: calc(100dvh - var(--hh-button-min-target) - var(--hh-space-6) - 5rem); overflow-y: auto;
+  display: grid; gap: var(--hh-space-2); padding: var(--hh-space-3); border-radius: var(--hh-radius-md);
+  background: var(--hh-surface-panel); color: var(--hh-surface-panel-foreground);
+}
+.proto-feed-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--hh-space-1); }
+.proto-feed-link {
+  display: grid; gap: var(--hh-space-1); justify-items: start; width: 100%; text-align: start; cursor: pointer; font: inherit;
+  padding: var(--hh-space-2); border: var(--hh-border-width-thin) solid var(--hh-border); border-radius: var(--hh-radius-sm);
+  background: var(--hh-surface-card); color: var(--hh-surface-card-foreground);
+}
+.proto-feed-link[aria-current='true'] { border: var(--hh-border-width-thick) solid var(--hh-ring); background: var(--hh-accent); color: var(--hh-accent-foreground); }
+.proto-feed-link[data-lock-soon='true'] { border-style: dashed; border-color: var(--hh-warning); }
+.proto-feed-title { font-weight: var(--hh-font-weight-semibold); font-size: var(--hh-type-body-sm-size); line-height: var(--hh-type-body-sm-line-height); }
+.proto-feed { display: grid; gap: var(--hh-space-8); min-width: 0; padding-bottom: 60vh; }
+.proto-feed-item { scroll-margin-top: calc(var(--hh-button-min-target) + var(--hh-space-6)); }
+.proto-feed-item[data-in-view='true'] > .hh-round { outline: var(--hh-focus-ring-width) solid var(--hh-ring); outline-offset: var(--hh-focus-ring-offset); }
+.proto-shell[data-variant='bay-page'] .hh-command-panel > .hh-round { scroll-margin-top: calc(var(--hh-button-min-target) + var(--hh-space-6)); }

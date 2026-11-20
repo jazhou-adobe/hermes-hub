@@ -99,6 +99,39 @@ const DIFF_ORDERS = `--- a/db/schema/orders.sql
 +CREATE INDEX CONCURRENTLY orders_customer_created_idx
 +  ON orders (customer_id, created_at DESC);`;
 
+const DIFF_LIMITER = `--- a/src/middleware/rate-limit.ts
++++ b/src/middleware/rate-limit.ts
+@@ -1,30 +1,32 @@
+ import { Redis } from 'ioredis';
+-import { WINDOW_MS } from './config';
++import { WINDOW_MS, BURST } from './config';
+ 
+ export function rateLimit(redis: Redis) {
+   return async (req, res, next) => {
+     const key = \`rl:\${req.ip}\`;
+     const now = Date.now();
+     const windowStart = now - WINDOW_MS;
+     await redis.zremrangebyscore(key, 0, windowStart);
+     const count = await redis.zcard(key);
+     res.setHeader('X-RateLimit-Limit', String(LIMIT));
+     res.setHeader('X-RateLimit-Remaining', String(Math.max(0, LIMIT - count)));
+     res.setHeader('X-RateLimit-Reset', String(Math.ceil((now + WINDOW_MS) / 1000)));
+     if (req.headers['x-internal'] === '1') return next();
+     if (req.path.startsWith('/health')) return next();
+     if (req.method === 'OPTIONS') return next();
+     const ttl = Math.ceil(WINDOW_MS / 1000);
+     await redis.expire(key, ttl);
+-    if (count >= LIMIT) {
++    if (count >= LIMIT + BURST) {
+       res.setHeader('Retry-After', String(ttl));
+       return res.status(429).json({ error: 'rate_limited' });
+     }
+     await redis.zadd(key, now, \`\${now}-\${Math.random()}\`);
++    res.setHeader('X-RateLimit-Burst', String(BURST));
+     return next();
+   };
+ }`;
+
 const MD_INTRO = `## Getting started (current)
 
 Hermes Hub is a **local** service. Install it, then run:
@@ -216,6 +249,7 @@ export const SEED_ROUNDS = [
         id: 'runner', kind: 'single', prompt: 'Which test run before merging?',
         policy: { on_timeout: 'apply_recommended', after_seconds: 55 },
         options: [{ id: 'unit', label: 'Unit only', detail: '40 s' }, { id: 'unit_int', label: 'Unit and integration', detail: '6 min' }, { id: 'full', label: 'Full suite', detail: '22 min' }],
+        attachments: [{ kind: 'diff', path: 'src/middleware/rate-limit.ts', content: DIFF_LIMITER }],
         recommended: 'unit_int', advice: { value: { selected: 'unit_int' }, rationale: 'The limiter touches Redis; integration covers it.' },
       },
       {

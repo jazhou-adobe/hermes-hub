@@ -1,15 +1,18 @@
-// PROTOTYPE, throwaway. Command Center flow: three structurally different variants over one shared live engine.
-// Plan: "Three variants of the Command Center triage flow (bay | focus | lanes), switchable via ?variant=, on one page."
+// PROTOTYPE, throwaway. Command Center flow: structurally different variants over one shared live engine.
+// Plan: "Five variants of the Command Center triage flow (bay | bay-page | feed | focus | lanes), switchable via ?variant=, on one page."
 import * as hub from './engine.js';
 import { callsign, endedRounds, hhmm, hhmmss, isOpenQ, isSet, liveness, pendingRounds, roundById, sessionById, state, valueWords } from './engine.js';
 import { patch } from './morph.js';
-import { KIND_WORD, chip, esc, icon, questionCount, roundForm, stateWord, strip, timer } from './widgets.js';
+import { KIND_WORD, chip, esc, expandedRuns, icon, lockSoon, lockSoonBadge, questionCount, roundForm, stateWord, strip, timer } from './widgets.js';
 
 const VARIANTS = [
   { key: 'bay', name: 'Strip Bay' },
+  { key: 'bay-page', name: 'Bay · page scroll' },
+  { key: 'feed', name: 'Feed' },
   { key: 'focus', name: 'Focus Queue' },
   { key: 'lanes', name: 'Agent Lanes' },
 ];
+const isBay = () => ui.variant === 'bay' || ui.variant === 'bay-page';
 const params = new URLSearchParams(location.search);
 const ui = {
   variant: VARIANTS.some((v) => v.key === params.get('variant')) ? params.get('variant') : 'bay',
@@ -35,9 +38,12 @@ const ui = {
   agentOpen: {},
   forget: null,
   copied: {},
+  feedShown: new Set(),
+  feedCleared: new Set(),
 };
 let toastSeq = 0;
 let pendingFocus = null;
+let pendingScroll = null;
 
 const root = document.getElementById('app');
 
@@ -73,6 +79,7 @@ function ctxFor(r, scope, extra = {}) {
   };
 }
 function focusSoon(selector) { pendingFocus = selector; }
+function scrollSoon(selector) { pendingScroll = selector; }
 function nextAfter(id, list) {
   const i = list.findIndex((r) => r.id === id);
   return list[(i + 1) % list.length] ?? null;
@@ -83,6 +90,7 @@ function setVariant(key) {
   p.set('variant', key);
   history.replaceState(null, '', `?${p}`);
   hub.state.events.unshift({ at: state.now, text: `Variant → ${key}` });
+  if (key === 'feed' && ui.openId) scrollSoon(`#feed-item-${ui.openId}`);
   render();
 }
 function setView(view) {
@@ -140,10 +148,11 @@ function statusLine() {
 
 function bay() {
   const list = pending();
+  const scope = ui.variant;
   if (ui.openId && !roundById(ui.openId)) ui.openId = list[0]?.id ?? null;
   const open = ui.openId ? roundById(ui.openId) : null;
   const active = list.some((r) => r.id === ui.bayActive) ? ui.bayActive : list.some((r) => r.id === ui.openId) ? ui.openId : list[0]?.id;
-  return `<h1 class="hh-visually-hidden">Triage · Strip Bay</h1>${statusLine()}
+  return `<h1 class="hh-visually-hidden">Triage · ${scope === 'bay' ? 'Strip Bay' : 'Bay, page scroll'}</h1>${statusLine()}
   <div class="hh-command" data-view="round"><div class="hh-command-grid">
     <section class="hh-strip-bay" aria-label="Pending Rounds">
       <div class="hh-strip-bay-head"><h2 class="hh-heading-md">Pending</h2><span class="hh-live-value" data-live="true">${list.length} pending</span><span class="hh-body-sm">Arrival order</span></div>
@@ -155,9 +164,36 @@ function bay() {
         <li><kbd class="hh-kbd">1–9</kbd><span>choose</span></li><li><kbd class="hh-kbd">A</kbd>/<kbd class="hh-kbd">R</kbd><span>approve / reject</span></li>
         <li><kbd class="hh-kbd">N</kbd><span>notes</span></li><li><kbd class="hh-kbd">Esc</kbd><span>back to bay</span></li><li><kbd class="hh-kbd">⌘↵</kbd><span>send</span></li></ul>
     </section>
-    <div class="hh-command-panel">${open ? roundForm(open, ctxFor(open, 'bay', { back: { label: 'Back to pending', action: 'back' } }))
+    <div class="hh-command-panel">${open ? roundForm(open, ctxFor(open, scope, { back: { label: 'Back to pending', action: 'back' } }))
       : `<div class="hh-empty-state">${icon('bay')}<p class="hh-heading-md">No Round open</p><p class="hh-body-sm">${list.length ? 'Pick a strip, or press J.' : 'Nothing is waiting for you.'}</p></div>`}</div>
   </div></div>`;
+}
+
+// ---------- Variant: Feed ----------
+
+function feed() {
+  const list = pending();
+  // Rounds that ended by policy or by their Agent while in the feed stay (ended, read-only) until the Human removes them.
+  const shown = state.rounds
+    .filter((r) => r.status === 'pending' || (ui.feedShown.has(r.id) && ['expired', 'cancelled'].includes(r.status) && !ui.feedCleared.has(r.id)))
+    .sort((a, b) => a.order - b.order || (a.status === 'pending') - (b.status === 'pending'));
+  ui.feedShown = new Set(shown.map((r) => r.id));
+  if (!shown.some((r) => r.id === ui.openId)) ui.openId = list[0]?.id ?? shown[0]?.id ?? null;
+  const index = `<nav class="proto-feed-index x-add" aria-label="Rounds in the feed">
+    <div class="hh-strip-bay-head"><h2 class="hh-heading-md">Pending</h2><span class="hh-live-value" data-live="true">${list.length}</span></div>
+    <ol class="proto-feed-list">${shown.map((r) => {
+      const soon = lockSoon(r);
+      const t = hub.timerReadout(r);
+      return `<li data-key="fi-${r.id}"><button type="button" class="proto-feed-link" data-action="feed-goto" data-round="${r.id}" ${r.id === ui.openId ? 'aria-current="true"' : ''} ${soon ? 'data-lock-soon="true"' : ''} data-status="${r.status}">
+        ${chip(r.sessionId)}<span class="proto-feed-title">${esc(r.title)}</span>${r.id === ui.openId ? '<span class="hh-mono-sm">▸ In view</span>' : ''}
+        <span class="hh-mono-sm">${r.status === 'pending' ? esc(t.left == null ? 'No deadline' : `${hub.mmss(t.left)} to next Lock`) : esc(r.status[0].toUpperCase() + r.status.slice(1))}</span>${soon ? lockSoonBadge() : ''}</button></li>`;
+    }).join('')}</ol>
+    <ul class="hh-kbd-hints" aria-label="Keyboard shortcuts"><li><kbd class="hh-kbd">J</kbd>/<kbd class="hh-kbd">K</kbd><span>next / previous Round</span></li><li><kbd class="hh-kbd">1–9</kbd><span>choose</span></li><li><kbd class="hh-kbd">A</kbd>/<kbd class="hh-kbd">R</kbd></li><li><kbd class="hh-kbd">⌘↵</kbd><span>send the Round in view</span></li></ul>
+  </nav>`;
+  const items = shown.map((r) => `<section class="proto-feed-item" data-key="feed-${r.id}" id="feed-item-${r.id}" data-round="${r.id}" ${r.id === ui.openId ? 'data-in-view="true"' : ''} aria-label="${esc(r.title)}">
+    ${roundForm(r, ctxFor(r, 'feed', { currentQ: r.id === ui.openId ? curQ(r) : -1, nextAction: 'feed-clear', nextLabel: 'Remove from feed' }))}</section>`).join('');
+  return `<h1 class="hh-visually-hidden">Triage · Feed</h1>${statusLine()}
+  <div class="proto-feed-wrap">${index}<div class="proto-feed">${items || `<div class="hh-empty-state">${icon('bay')}<p class="hh-heading-md">Feed clear</p><p class="hh-body-sm">No pending Rounds. New ones join the end of the feed.</p></div>`}</div></div>`;
 }
 
 // ---------- Variant 2: Focus Queue ----------
@@ -170,7 +206,7 @@ function focus() {
   const upcoming = pos >= 0 ? [...list.slice(pos + 1), ...list.slice(0, pos)] : list;
   const head = `<div class="proto-queue x-add" role="group" aria-label="Queue">
     <span class="proto-queue-count"><span class="hh-live-value" data-live="true">${list.length} pending</span>${pos >= 0 ? `<span class="hh-mono-sm">Now ${pos + 1} of ${list.length}</span>` : ''}</span>
-    <span class="proto-queue-next"><span class="hh-label">Next</span>${upcoming.slice(0, 4).map((x) => `<button type="button" class="proto-next" data-action="open" data-round="${x.id}" title="${esc(x.title)}">${chip(x.sessionId)}<span class="hh-mono-sm">${esc(hub.timerReadout(x).left == null ? 'waits' : hub.mmss(hub.timerReadout(x).left))}</span></button>`).join('')}${upcoming.length > 4 ? `<span class="hh-mono-sm">+${upcoming.length - 4} more</span>` : ''}${upcoming.length === 0 ? '<span class="hh-body-sm">Nothing after this one</span>' : ''}</span>
+    <span class="proto-queue-next"><span class="hh-label">Next</span>${upcoming.slice(0, 4).map((x) => `<button type="button" class="proto-next" data-action="open" data-round="${x.id}" title="${esc(x.title)}">${chip(x.sessionId)}<span class="hh-mono-sm">${esc(hub.timerReadout(x).left == null ? 'waits' : hub.mmss(hub.timerReadout(x).left))}</span>${lockSoon(x) ? lockSoonBadge() : ''}</button>`).join('')}${upcoming.length > 4 ? `<span class="hh-mono-sm">+${upcoming.length - 4} more</span>` : ''}${upcoming.length === 0 ? '<span class="hh-body-sm">Nothing after this one</span>' : ''}</span>
     <ul class="hh-kbd-hints" aria-label="Keyboard shortcuts"><li><kbd class="hh-kbd">1–9</kbd><span>choose</span></li><li><kbd class="hh-kbd">A</kbd>/<kbd class="hh-kbd">R</kbd></li><li><kbd class="hh-kbd">J</kbd>/<kbd class="hh-kbd">K</kbd><span>Question</span></li><li><kbd class="hh-kbd">⌘↵</kbd><span>send + next</span></li><li><kbd class="hh-kbd">S</kbd><span>skip</span></li><li><kbd class="hh-kbd">D</kbd><span>dismiss</span></li><li><kbd class="hh-kbd">E</kbd><span>redirect</span></li></ul>
   </div>`;
   if (!r) {
@@ -327,6 +363,8 @@ function keysDialog() {
   if (!ui.keysOpen) return '';
   const rows = {
     bay: [['J / K', 'move in the bay'], ['Enter', 'open the Round'], ['Esc', 'back to the bay']],
+    'bay-page': [['J / K', 'move in the bay'], ['Enter', 'open the Round (the page scrolls to it)'], ['Esc', 'back to the bay']],
+    feed: [['J / K', 'next / previous Round in the feed'], ['⌘↵', 'send the Round in view, then the next one scrolls in']],
     focus: [['J / K', 'next / previous Question'], ['S', 'skip to the next Round'], ['⌘↵', 'send, then the next Round opens']],
     lanes: [['Tab', 'move between strips'], ['Enter', 'open in the drawer'], ['Esc', 'close the drawer']],
   }[ui.variant];
@@ -339,36 +377,59 @@ function keysDialog() {
 // ---------- Render ----------
 
 function render() {
-  const main = ui.view === 'triage' ? { bay, focus, lanes }[ui.variant]() : { log: logView, agents: agentsView, settings: settingsView }[ui.view]();
+  const main = ui.view === 'triage' ? { bay, 'bay-page': bay, feed, focus, lanes }[ui.variant]() : { log: logView, agents: agentsView, settings: settingsView }[ui.view]();
   document.documentElement.toggleAttribute('data-outline', ui.outline);
   document.title = `(${pending().length}) ${ui.view === 'triage' ? 'Triage' : ui.view[0].toUpperCase() + ui.view.slice(1)} · Hermes Hub · ${ui.variant}`;
   patch(root, `<a class="hh-skip-link" href="#main">Skip to ${ui.view === 'triage' ? 'triage' : 'content'}</a>${appBar()}
     <div class="proto-shell" data-variant="${ui.variant}"><div class="proto-nav-wrap">${sideNav()}</div><main id="main" class="proto-main" data-view="${ui.view}">${main}</main></div>
     ${toasts()}${keysDialog()}${statePanel()}${switcher()}`);
+  const scrollTo = pendingScroll ? document.querySelector(pendingScroll) : null;
+  pendingScroll = null;
   if (pendingFocus) {
     const el = document.querySelector(pendingFocus);
     pendingFocus = null;
-    el?.focus({ preventScroll: false });
+    el?.focus({ preventScroll: !!scrollTo });
+  }
+  if (scrollTo) {
+    ignoreScrollUntil = performance.now() + 300;
+    scrollTo.scrollIntoView({ block: 'start' });
   }
 }
+
+// Feed: the Round whose head is nearest the top of the viewport is "in view"; keys act on it and the index marks it.
+let ignoreScrollUntil = 0;
+let scrollRaf = 0;
+window.addEventListener('scroll', () => {
+  if (ui.view !== 'triage' || ui.variant !== 'feed' || scrollRaf) return;
+  scrollRaf = requestAnimationFrame(() => {
+    scrollRaf = 0;
+    if (performance.now() < ignoreScrollUntil) return;
+    const items = [...document.querySelectorAll('.proto-feed-item')];
+    let cur = items[0];
+    for (const it of items) if (it.getBoundingClientRect().top <= 140) cur = it;
+    if (cur && cur.dataset.round !== ui.openId) { ui.openId = cur.dataset.round; render(); }
+  });
+}, { passive: true });
 
 // ---------- Actions ----------
 
 function afterTerminal(prevList, id) {
+  // The next pending Round in arrival order opens automatically, in every variant.
   const idx = prevList.findIndex((r) => r.id === id);
   const now = pending();
   const next = now[idx] ?? now[0] ?? null;
   ui.openId = next?.id ?? null;
-  if (ui.variant === 'bay') {
+  if (isBay()) {
     ui.bayActive = next?.id ?? null;
     focusSoon(next ? `.hh-strip[data-round="${next.id}"]` : '.hh-strip-bay');
+    if (ui.variant === 'bay-page' && next) scrollSoon(`[data-key="round-bay-page-${next.id}"]`);
   } else if (ui.variant === 'focus') {
     focusSoon(next ? `#focus-${next.id}-title` : '#main');
+  } else if (ui.variant === 'feed') {
+    if (next) { scrollSoon(`#feed-item-${next.id}`); focusSoon(`#feed-${next.id}-title`); }
   } else {
-    ui.drawerOpen = false;
-    const sameLane = now.find((r) => r.sessionId === roundById(id).sessionId);
-    focusSoon(sameLane ? `.hh-strip[data-round="${sameLane.id}"] .hh-strip-head` : `#lane-${roundById(id).sessionId}`);
-    if (sameLane) ui.openId = sameLane.id;
+    ui.drawerOpen = !!next;
+    focusSoon(next ? `#lanes-${next.id}-title` : '.proto-lanes');
   }
 }
 
@@ -397,6 +458,8 @@ function openRound(id, moveFocus) {
   ui.bayActive = id;
   if (ui.variant === 'lanes') ui.drawerOpen = true;
   if (ui.view !== 'triage') ui.view = 'triage';
+  if (ui.variant === 'feed') { scrollSoon(`#feed-item-${id}`); moveFocus = true; }
+  if (ui.variant === 'bay-page') scrollSoon(`[data-key="round-bay-page-${id}"]`);
   if (moveFocus) focusSoon(`#${ui.variant}-${id}-title`);
   render();
 }
@@ -422,7 +485,10 @@ function advanceQ(r, from) {
 
 const actions = {
   nav: (el, e) => { e.preventDefault(); setView(el.dataset.view); },
-  open: (el) => openRound(el.dataset.round, ui.variant !== 'bay'),
+  open: (el) => openRound(el.dataset.round, !isBay()),
+  'feed-goto': (el) => openRound(el.dataset.round, true),
+  'feed-clear': (el) => { ui.feedCleared.add(el.dataset.round); ui.openId = null; render(); },
+  'diff-expand': (el) => { expandedRuns.add(el.dataset.run); render(); },
   back: () => {
     const list = pending();
     if (!roundById(ui.openId) || roundById(ui.openId).status !== 'pending') ui.openId = list[0]?.id ?? null;
@@ -532,6 +598,8 @@ document.addEventListener('focusin', (e) => {
   }
   const s = e.target.closest?.('.hh-strip[role="option"]');
   if (s) ui.bayActive = s.dataset.round;
+  const f = ui.variant === 'feed' && e.target.closest?.('.proto-feed-item');
+  if (f && f.dataset.round !== ui.openId) { ui.openId = f.dataset.round; render(); }
 });
 
 document.addEventListener('change', (e) => {
@@ -599,7 +667,7 @@ document.addEventListener('keydown', (e) => {
   if (ui.view !== 'triage') return;
   const open = ui.openId ? roundById(ui.openId) : null;
 
-  if (ui.variant === 'bay') {
+  if (isBay()) {
     const list = t.closest?.('[data-list="bay"]');
     if (list && !e.metaKey && !e.ctrlKey) {
       const strips = [...list.querySelectorAll('.hh-strip[role="option"]')];
@@ -641,6 +709,21 @@ document.addEventListener('keydown', (e) => {
       ui.currentQ[open.id] = nx;
       render();
       document.querySelector(`[data-key="q-${open.id}-${open.questions[nx].id}"]`)?.scrollIntoView({ block: 'nearest' });
+    }
+    return;
+  }
+
+  if (ui.variant === 'feed') {
+    const inRound = t.closest?.('.proto-feed-item');
+    const r = inRound ? roundById(inRound.dataset.round) : open;
+    if (roundKeys(e, r)) return;
+    if (isTyping(t) || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === 'j' || e.key === 'k') {
+      e.preventDefault();
+      const ids = [...document.querySelectorAll('.proto-feed-item')].map((x) => x.dataset.round);
+      const at = ids.indexOf(ui.openId);
+      const to = ids[Math.max(0, Math.min(ids.length - 1, at + (e.key === 'j' ? 1 : -1)))];
+      if (to) openRound(to, true);
     }
     return;
   }

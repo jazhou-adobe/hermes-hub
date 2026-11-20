@@ -2,7 +2,9 @@
 
 Answers [hermes-hub#12 "How should the Command Center flow work?"](https://github.com/jazhou-adobe/hermes-hub/issues/12): how does one Human move through Rounds arriving from many Agents?
 
-**Plan:** three variants of the Command Center triage flow (`bay` | `focus` | `lanes`), switchable via `?variant=`, on one page, over one shared in-memory live engine. Throwaway: no tests, no persistence, not for main.
+**Plan:** five variants of the Command Center triage flow (`bay` | `bay-page` | `feed` | `focus` | `lanes`), switchable via `?variant=`, on one page, over one shared in-memory live engine. Throwaway: no tests, no persistence, not for main.
+
+Round 2 (after the Human picked "bay, but all Questions on one screen with scrolling"): `bay-page` and `feed` are the two readings of that pick.
 
 ## Run
 
@@ -20,11 +22,18 @@ Switch with the floating bottom bar or `←` / `→` (ignored while an input has
 
 | Key | Name | Structure |
 |---|---|---|
-| `bay` (default) | Strip Bay | The design's blueprint: pending strips in arrival order on the left (listbox: `j`/`k`, `Enter`), the open Round on the right. `Esc` back to the bay; after any terminal action focus moves to the next strip. |
+| `bay` (default) | Strip Bay | The design's blueprint: pending strips in arrival order on the left (listbox: `j`/`k`, `Enter`), the open Round on the right in a fixed-height box whose Question body scrolls inside. `Esc` back to the bay. |
+| `bay-page` | Bay · page scroll | Same bay, but the open Round is one tall column that scrolls with the page: head, every Question with its Attachments at full height (diffs collapse only long unchanged runs behind "Show N unchanged lines"), notes, Answer bar. The bay stays sticky on the left; the Answer bar is sticky at the bottom of the viewport while the Round is in view. |
+| `feed` | Feed | No open/close: every pending Round fully expanded, one after another in arrival order, each with its own head, Questions and Send / Dismiss / Redirect / Ask advisor bar. A slim sticky index on the left (callsign, title, time to next Lock, "Lock soon", "In view") scrolls the feed to a Round. `j`/`k` jump between Rounds; `1`–`9`, `a`/`r`, `⌘↵` act on the Round in view (or the one holding focus). Sent / dismissed / redirected Rounds leave the feed for the log; Rounds that expire or are superseded stay ended in place until "Remove from feed". |
 | `focus` | Focus Queue | One Round at a time, full width, with a thin queue header (count, position, next callsigns + their next deadline). Global keys: `1`–`9`, `a`/`r` (auto-advance to the next unanswered Question), `j`/`k` Question, `⌘↵` send + next Round, `s` skip, `d` dismiss, `e` redirect. |
 | `lanes` | Agent Lanes | One lane per Agent session (callsign, Live/Idle/Gone, pending count, last seen, branch), its pending Rounds stacked inside. A Round opens in an end-side drawer; the lanes stay visible beside it. |
 
 Shared in every variant: side nav to **Answered log**, **Agents** (roster, Detection details, Forget Agent) and **Settings** (Advisors, Auto-ask rules, notification toggle). `?view=log|agents|settings` deep-links.
+
+Decided for all variants (round 2):
+
+- **Lock soon:** when a Round's next deadline is under 60 s its strip / index entry / lane strip / queue chip / Round head says "Lock soon" (word plus a dashed warning frame, never colour alone).
+- **Next opens automatically:** after Send, Dismiss or Redirect the next pending Round in arrival order opens (bay and bay-page: open beside the bay, focus on its strip; focus: next Round; feed: scrolls to it; lanes: the drawer shows it).
 
 ## The simulated Hub (src/engine.js)
 
@@ -56,6 +65,9 @@ UI the Flight Director design system does not specify yet (all marked `.x-add`):
 12. **Agent lane** (`lanes`): lane head (callsign, state, pending, last seen, branch), empty-lane slot, Round drawer beside lanes.
 13. Notification toast for "would notify" events (Lock in 15 s, Suggestion ready, new Round) with Open.
 14. Free-text **Recommended** text shown with "Use it" (never prefilled).
+15. **Lock soon** cue (< 60 s to the next Lock) on strips, index entries, lane strips, queue chips and the Round head.
+16. **Page-scroll Round** (`bay-page`, `feed`): full-height Attachments, "Show N unchanged lines" diff folds, Answer bar sticky at the viewport bottom while its Round is in view, sticky bay.
+17. **Feed index** (`feed`): slim sticky list with "In view" marker and time to next Lock; ended-in-place Rounds with "Remove from feed".
 
 Note: the image Attachments here are SVG data URIs for size; the schema allows png, jpeg, webp, gif only.
 
@@ -63,4 +75,4 @@ Note: the image Attachments here are SVG data URIs for size; the schema allows p
 
 - `index.html` – entry; `src/app.js` – shell, variants, views, keys, switcher, state panel; `src/widgets.js` – shared strip / Round / Question / Attachment markup; `src/engine.js` – live engine; `src/data.js` – mock data; `src/morph.js` – tiny DOM morph so per-tick re-render keeps focus and typing.
 - `styles/themes.css`, `styles/flight-director.css`, `styles/hermes-components.css` – copied from `hermes-master/design`; `styles/proto.css` – page base, variant layouts, prototype chrome.
-- `screenshots/{bay,focus,lanes}.png` – 1440×900.
+- `screenshots/{bay,bay-page,feed,focus,lanes}.png` – 1440×900; `bay-page-scrolled.png`, `feed-scrolled.png` – the same scrolled down.

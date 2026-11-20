@@ -50,23 +50,31 @@ export function timer(r) {
 
 const lockCount = (r) => r.questions.filter((q) => q.lock).length;
 
+/** A Round whose next deadline is under 60 s: shown as "Lock soon" (word + dashed warning frame), never colour alone. */
+export const lockSoon = (r) => r.status === 'pending' && (timerReadout(r).left ?? Infinity) < 60_000;
+export const lockSoonBadge = () => `<span class="proto-lock-soon x-add">${icon('clock')} Lock soon</span>`;
+
+/** Diff runs of unchanged lines the Human expanded ("Show N unchanged lines"), keyed by attachment + run start. */
+export const expandedRuns = new Set();
+
 /** One pending Round as a strip in its holder. mode: 'option' (listbox) or 'button'. */
 export function strip(r, { mode = 'option', selected = false, tabIndex = -1, action = 'open', goneNote = true } = {}) {
   const t = timerReadout(r);
   const s = sessionById(r.sessionId);
   const locks = lockCount(r);
-  const label = ['Pending', r.title, callsign(s), questionCount(r), t.text, locks ? `${locks} locked` : ''].filter(Boolean).join(', ');
+  const soon = lockSoon(r);
+  const label = ['Pending', soon ? 'Lock soon' : '', r.title, callsign(s), questionCount(r), t.text, locks ? `${locks} locked` : ''].filter(Boolean).join(', ');
   const cells = `
     <span class="hh-strip-cell" data-cell="callsign">${chip(r.sessionId)}<span class="hh-mono-sm">${r.id}</span></span>
     <span class="hh-strip-cell" data-cell="title"><span class="hh-strip-header hh-strip-title">${esc(r.title)}</span>
       <span class="hh-strip-policy">${questionCount(r)}${locks ? ` · ${locks} locked` : ''}${r.advisor?.status === 'working' ? ' · Advisor working' : ''}${r.supersedes ? ` · replaces ${r.supersedes}` : ''}</span></span>
     <span class="hh-strip-cell" data-cell="meta"><span class="hh-mono">${hhmm(r.receivedAt)}</span>${selected ? '<span class="hh-mono-sm">Open</span>' : ''}${goneNote && liveness(s) === 'Gone' ? '<span class="hh-body-sm">Agent gone · Answer is kept for its next poll</span>' : ''}</span>`;
-  const tab = `<div class="hh-strip-tab" aria-hidden="true"><span>Pending</span><span class="hh-mono-sm">${esc(t.text)}</span></div>`;
+  const tab = `<div class="hh-strip-tab" aria-hidden="true"><span>Pending${soon ? ' · Lock soon' : ''}</span><span class="hh-mono-sm">${esc(t.text)}</span></div>`;
   if (mode === 'button') {
-    return `<li class="hh-strip" data-mode="button" data-status="pending" data-key="strip-${r.id}" data-round="${r.id}">${tab}
+    return `<li class="hh-strip" data-mode="button" data-status="pending" data-key="strip-${r.id}" data-round="${r.id}" ${soon ? 'data-lock-soon="true"' : ''}>${tab}
       <div class="hh-strip-paper"><button type="button" class="hh-strip-head" data-action="${action}" data-round="${r.id}" aria-label="${esc(label)}">${cells}</button></div>${timer(r)}</li>`;
   }
-  return `<li class="hh-strip" role="option" data-status="pending" data-key="strip-${r.id}" data-round="${r.id}" aria-selected="${selected}" aria-label="${esc(label)}" tabindex="${tabIndex}" ${selected ? 'data-selected="true"' : ''} data-action="${action}">${tab}
+  return `<li class="hh-strip" role="option" data-status="pending" data-key="strip-${r.id}" data-round="${r.id}" aria-selected="${selected}" aria-label="${esc(label)}" tabindex="${tabIndex}" ${selected ? 'data-selected="true"' : ''} ${soon ? 'data-lock-soon="true"' : ''} data-action="${action}">${tab}
     <div class="hh-strip-paper" aria-hidden="true"><div class="hh-strip-head">${cells}</div></div>${timer(r)}</li>`;
 }
 
@@ -102,12 +110,28 @@ export function attachment(a, scope) {
     const lines = a.content.split('\n');
     const add = lines.filter((l) => l.startsWith('+') && !l.startsWith('+++')).length;
     const rem = lines.filter((l) => l.startsWith('-') && !l.startsWith('---')).length;
-    const body = lines.filter((l) => !l.startsWith('+++') && !l.startsWith('---')).map((l) => {
+    const rows = lines.filter((l) => !l.startsWith('+++') && !l.startsWith('---')).map((l) => {
       const kind = l.startsWith('+') ? 'add' : l.startsWith('-') ? 'remove' : null;
       const sign = kind === 'add' ? '+' : kind === 'remove' ? '−' : ' ';
       const text = kind || l.startsWith(' ') ? l.slice(1) : l;
-      return `<li class="hh-diff-line"${kind ? ` data-kind="${kind}"` : ''}><span class="hh-diff-sign" aria-hidden="true">${sign}</span><span>${kind ? `<span class="hh-visually-hidden">${kind === 'add' ? 'Added: ' : 'Removed: '}</span>` : ''}${esc(text)}</span></li>`;
-    }).join('');
+      return { kind, html: `<li class="hh-diff-line"${kind ? ` data-kind="${kind}"` : ''}><span class="hh-diff-sign" aria-hidden="true">${sign}</span><span>${kind ? `<span class="hh-visually-hidden">${kind === 'add' ? 'Added: ' : 'Removed: '}</span>` : ''}${esc(text)}</span></li>` };
+    });
+    // Collapse long unchanged runs (8+ lines) to 2 lines either side behind "Show N unchanged lines".
+    const out = [];
+    for (let i = 0; i < rows.length;) {
+      if (rows[i].kind) { out.push(rows[i++].html); continue; }
+      let j = i;
+      while (j < rows.length && !rows[j].kind) j++;
+      const run = rows.slice(i, j);
+      const key = `${scope}-${a.path}-${i}`;
+      if (run.length >= 8 && !expandedRuns.has(key)) {
+        out.push(...run.slice(0, 2).map((x) => x.html));
+        out.push(`<li class="proto-diff-fold x-add"><button type="button" class="hh-button" data-variant="ghost" data-size="sm" data-action="diff-expand" data-run="${esc(key)}" aria-expanded="false">Show ${run.length - 4} unchanged lines</button></li>`);
+        out.push(...run.slice(-2).map((x) => x.html));
+      } else out.push(...run.map((x) => x.html));
+      i = j;
+    }
+    const body = out.join('');
     return `<figure class="hh-attachment"><figcaption class="hh-attachment-head"><span class="hh-badge">${icon('diff')} Diff</span><span class="hh-attachment-title hh-mono">${esc(a.path)}</span><span class="hh-mono-sm hh-muted">+${add} −${rem}</span></figcaption>
       <div class="hh-attachment-body" tabindex="0" aria-label="Diff of ${esc(a.path)}"><ol class="hh-diff">${body}</ol></div></figure>`;
   }
@@ -265,7 +289,7 @@ function endedBar(r, ctx) {
       <p class="hh-body-sm">${esc(line)}.${replaced ? ' Your Draft carried over to the replacement.' : r.notSent ? ' Your draft is kept below and in the answered log.' : ''}</p></div>
     <div class="hh-answer-bar-row">${r.notSent ? `<button type="button" class="hh-button" data-action="copy-draft" data-round="${r.id}">${icon('file')} Copy draft</button>` : '<span></span>'}
       <span class="hh-row">${replaced ? `<button type="button" class="hh-button" data-variant="primary" data-action="open-replacement" data-round="${replaced}">${icon('arrow-right')} Open ${replaced}</button>` : ''}
-      <button type="button" class="hh-button" ${replaced ? '' : 'data-variant="primary"'} data-action="${ctx.nextAction ?? 'back'}">${ctx.nextLabel ?? `${icon('arrow-left')} Back to pending`}</button></span></div>`;
+      <button type="button" class="hh-button" ${replaced ? '' : 'data-variant="primary"'} data-action="${ctx.nextAction ?? 'back'}" data-round="${r.id}">${ctx.nextLabel ?? `${icon('arrow-left')} Back to pending`}</button></span></div>`;
 }
 
 /** The open Round as a form: head, Questions (the only scrolling part), Answer bar. */
@@ -283,7 +307,7 @@ export function roundForm(r, ctx) {
   const locks = lockCount(r);
   const head = `<div class="hh-round-head">
       ${ctx.back ? `<button type="button" class="hh-button hh-round-back" data-variant="ghost" data-action="${ctx.back.action}" aria-keyshortcuts="Escape">${icon('arrow-left')} ${ctx.back.label}</button>` : ''}
-      <div class="hh-row">${badge}${chip(r.sessionId)}<span class="hh-mono-sm">${r.id} · received ${hhmm(r.receivedAt)}</span>${r.supersedes ? `<span class="hh-badge x-add">Replaces ${r.supersedes}</span>` : ''}${liveness(s) === 'Gone' ? '<span class="hh-body-sm">Agent gone · Answer is kept for its next poll</span>' : ''}</div>
+      <div class="hh-row">${badge}${lockSoon(r) ? lockSoonBadge() : ''}${chip(r.sessionId)}<span class="hh-mono-sm">${r.id} · received ${hhmm(r.receivedAt)}</span>${r.supersedes ? `<span class="hh-badge x-add">Replaces ${r.supersedes}</span>` : ''}${liveness(s) === 'Gone' ? '<span class="hh-body-sm">Agent gone · Answer is kept for its next poll</span>' : ''}</div>
       <h2 class="hh-strip-header" tabindex="-1" id="${ctx.scope}-${r.id}-title">${esc(r.title)}</h2>
       ${ended ? '' : `<div class="proto-round-policy"><span class="hh-policy-badge"><span class="hh-badge" data-tone="${r.policy.on_timeout === 'cancel' ? 'warning' : ''}">${icon('clock')} Policy</span><span class="hh-mono-sm">Round ${policyWords(r.policy)} · next: ${esc(t.text)}${locks ? ` · ${locks} of ${r.questions.length} locked, Round stays pending` : ''}</span></span></div>`}
       ${r.context ? `<p class="hh-body-sm">${esc(r.context)}</p>` : ''}
