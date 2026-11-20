@@ -127,3 +127,96 @@ fieldset.locked {
   font-size: 0.85rem;
   font-style: italic;
 }
+
+/* Delegation (Advisors), S8 */
+.advisor {
+  margin-top: 0.75rem;
+  border-top: 1px dashed color-mix(in srgb, currentColor 25%, transparent);
+  padding-top: 0.5rem;
+}
+.advisor-ask {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.advisor-ask input[type="text"] {
+  flex: 1;
+  min-width: 10rem;
+}
+.advisor-status {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-style: italic;
+}
+.advisor-unparsed pre {
+  white-space: pre-wrap;
+  max-height: 10rem;
+  overflow-y: auto;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  padding: 0.5rem;
+}
+.suggested-note {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: color-mix(in srgb, teal 70%, currentColor);
+}
+.suggested-accept {
+  font-size: 0.85rem;
+}
+.suggested-accept button {
+  margin-left: 0.4rem;
+}
+.nav {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.nav a[aria-current="page"] {
+  font-weight: 600;
+  text-decoration: none;
+}
+.db-size {
+  opacity: 0.7;
+  font-size: 0.9rem;
+}
+.filters {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.chip-row button[aria-pressed="true"] {
+  outline: 2px solid currentColor;
+}
+.date-range {
+  display: flex;
+  gap: 1rem;
+}
+.export {
+  justify-self: start;
+}
+.day-heading {
+  font-size: 1rem;
+  opacity: 0.8;
+  margin: 1.5rem 0 0.5rem;
+}
+.snippet {
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+.snippet mark {
+  background: color-mix(in srgb, yellow 55%, transparent);
+}
+.question-answer {
+  margin-block: 0.4rem;
+}
+.setter {
+  opacity: 0.7;
+  font-size: 0.85rem;
+}

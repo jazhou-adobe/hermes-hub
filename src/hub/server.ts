@@ -2,7 +2,8 @@ import type { BuildArtifact, Server } from "bun";
 import { join } from "node:path";
 import { HTTP_STATUS, HubError } from "../errors.ts";
 import { CLONE_ROOT } from "../paths.ts";
-import type { Engine, HubEvent } from "./engine.ts";
+import type { Outcome } from "../schema/types.ts";
+import type { Engine, HubEvent, LogFilter } from "./engine.ts";
 import { noopLogger, type Logger } from "./log.ts";
 import devCommandCenter from "../../web/index.html";
 
@@ -96,6 +97,32 @@ async function buildCommandCenter(): Promise<{ index: BuildArtifact; assets: Map
   return { index, assets };
 }
 
+const OUTCOMES: Record<Outcome, true> = { answered: true, dismissed: true, redirected: true, expired: true, cancelled: true };
+function isOutcome(v: string): v is Outcome {
+  return v in OUTCOMES;
+}
+
+/** Reads the answered log's filter chips and search box from query params (answered-log spec). */
+function parseLogFilter(url: URL): LogFilter {
+  const p = url.searchParams;
+  const filter: LogFilter = {};
+  const outcome = p.get("outcome");
+  if (outcome !== null && isOutcome(outcome)) filter.outcome = outcome;
+  const sessionId = p.get("session_id");
+  if (sessionId !== null) filter.session_id = sessionId;
+  const callsign = p.get("callsign");
+  if (callsign !== null) filter.callsign = callsign;
+  const project = p.get("project");
+  if (project !== null) filter.project = project;
+  const from = p.get("from");
+  if (from !== null) filter.from = from;
+  const to = p.get("to");
+  if (to !== null) filter.to = to;
+  const q = p.get("q");
+  if (q !== null && q !== "") filter.q = q;
+  return filter;
+}
+
 export async function startServer(engine: Engine, port: number, logger: Logger = noopLogger): Promise<Server<undefined>> {
   const session = (req: Request) => engine.sessionFor(req.headers.get("Hermes-Session"));
   const development = process.env.NODE_ENV === "development";
@@ -127,13 +154,14 @@ export async function startServer(engine: Engine, port: number, logger: Logger =
     // Bun's HTML import with hot reload; it resolves bundled asset URLs against the cwd.
     // The guard and CSP do not cover these UI routes in development.
     process.chdir(CLONE_ROOT);
-    ui = { "/": devCommandCenter, "/rounds/:id": devCommandCenter };
+    ui = { "/": devCommandCenter, "/rounds/:id": devCommandCenter, "/log": devCommandCenter };
   } else {
     const { index, assets } = await buildCommandCenter();
     const page = handle(() => new Response(index, { headers: { "Content-Type": index.type, "Content-Security-Policy": CSP } }));
     ui = {
       "/": { GET: page },
       "/rounds/:id": { GET: page },
+      "/log": { GET: page },
       "/assets/:file": {
         GET: handle<"/assets/:file">((req) => {
           const asset = assets.get(req.params.file);
@@ -221,6 +249,38 @@ export async function startServer(engine: Engine, port: number, logger: Logger =
         POST: handle<"/cc/rounds/:id/remove">((req) => {
           engine.removeFromFeed(req.params.id);
           return Response.json({ ok: true });
+        }),
+      },
+      "/cc/advisors": { GET: handle(() => Response.json({ advisors: engine.advisorNames() })) },
+      "/cc/rounds/:id/advisor": {
+        POST: handle<"/cc/rounds/:id/advisor">(async (req) => {
+          const body = (await jsonBody(req, "invalid_answer")) as { advisor?: unknown; brief?: unknown };
+          if (typeof body.advisor !== "string" || !body.advisor) {
+            throw new HubError("invalid_answer", "advisor is required");
+          }
+          const brief = typeof body.brief === "string" && body.brief.trim() ? body.brief : undefined;
+          return Response.json(engine.askAdvisor(req.params.id, body.advisor, brief, "manual"));
+        }),
+      },
+      "/cc/rounds/:id/advisor/cancel": {
+        POST: handle<"/cc/rounds/:id/advisor/cancel">((req) => {
+          engine.cancelAdvisor(req.params.id);
+          return Response.json({ ok: true });
+        }),
+      },
+      "/cc/log": {
+        GET: handle((req) => {
+          const filter = parseLogFilter(new URL(req.url));
+          return Response.json({ entries: engine.log(filter), db_size_bytes: engine.dbSizeBytes() });
+        }),
+      },
+      "/cc/log/export": {
+        GET: handle((req) => {
+          const filter = parseLogFilter(new URL(req.url));
+          const date = new Date().toISOString().slice(0, 10);
+          return Response.json(engine.exportLog(filter), {
+            headers: { "Content-Disposition": `attachment; filename="hermes-log-${date}.json"` },
+          });
         }),
       },
       "/cc/events": {

@@ -150,6 +150,8 @@ function runConfig(): number {
       `limits.live_ms = ${config.limits.live_ms} (${sources.limits.live_ms})`,
       `limits.idle_ms = ${config.limits.idle_ms} (${sources.limits.idle_ms})`,
       `backups.keep = ${config.backups.keep} (${sources.backups.keep})`,
+      `advisor = [${config.advisors.map((a) => a.name).join(", ")}] (${sources.advisors})`,
+      `auto_ask = ${config.autoAsk.length} rule(s) (${sources.autoAsk})`,
     ].join("\n"),
   );
   return 0;

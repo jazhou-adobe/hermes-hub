@@ -20,12 +20,29 @@ export interface BackupSettings {
   keep: number;
 }
 
-/** Everything in `config.toml` (hub-operations spec); Advisors and Auto-ask rules arrive with S8. */
+export interface AdvisorConfig {
+  name: string;
+  command: string[];
+  timeout_seconds: number;
+}
+
+/** `config.toml` `[[auto_ask]]` (delegation spec): matches on kind + project, label narrows it. */
+export interface AutoAskRule {
+  kind: string;
+  project: string;
+  label?: string;
+  advisor: string;
+  brief?: string;
+}
+
+/** Everything in `config.toml` (hub-operations spec). */
 export interface HubConfig {
   port: number;
   log_level: LogLevel;
   limits: HubLimits;
   backups: BackupSettings;
+  advisors: AdvisorConfig[];
+  autoAsk: AutoAskRule[];
 }
 
 export type ConfigSource = "file" | "default";
@@ -35,6 +52,8 @@ export interface ConfigSources {
   log_level: ConfigSource;
   limits: Record<keyof HubLimits, ConfigSource>;
   backups: Record<keyof BackupSettings, ConfigSource>;
+  advisors: ConfigSource;
+  autoAsk: ConfigSource;
 }
 
 export const DEFAULT_PORT = 4747;
@@ -42,6 +61,47 @@ const DEFAULT_LOG_LEVEL: LogLevel = "info";
 const DEFAULT_LIVE_MS = 2 * 60_000;
 const DEFAULT_IDLE_MS = 30 * 60_000;
 const DEFAULT_BACKUPS_KEEP = 7;
+const DEFAULT_ADVISOR_TIMEOUT_SECONDS = 300;
+
+function parseAdvisors(raw: unknown, path: string): AdvisorConfig[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) throw new Error(`${path}: [[advisor]] must be an array of tables`);
+  return raw.map((entry, i) => {
+    if (!entry || typeof entry !== "object") throw new Error(`${path}: advisor[${i}] must be a table`);
+    const e = entry as Record<string, unknown>;
+    if (typeof e.name !== "string" || !e.name.trim()) throw new Error(`${path}: advisor[${i}].name must be a non-empty string`);
+    if (!Array.isArray(e.command) || e.command.length === 0 || !e.command.every((c) => typeof c === "string")) {
+      throw new Error(`${path}: advisor[${i}].command must be a non-empty array of strings`);
+    }
+    const timeout_seconds = e.timeout_seconds ?? DEFAULT_ADVISOR_TIMEOUT_SECONDS;
+    if (typeof timeout_seconds !== "number" || !Number.isInteger(timeout_seconds) || timeout_seconds < 1) {
+      throw new Error(`${path}: advisor[${i}].timeout_seconds must be a positive integer`);
+    }
+    return { name: e.name, command: e.command as string[], timeout_seconds };
+  });
+}
+
+function parseAutoAsk(raw: unknown, path: string, advisorNames: Set<string>): AutoAskRule[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) throw new Error(`${path}: [[auto_ask]] must be an array of tables`);
+  return raw.map((entry, i) => {
+    if (!entry || typeof entry !== "object") throw new Error(`${path}: auto_ask[${i}] must be a table`);
+    const e = entry as Record<string, unknown>;
+    if (typeof e.kind !== "string" || !e.kind.trim()) throw new Error(`${path}: auto_ask[${i}].kind must be a non-empty string`);
+    if (typeof e.project !== "string" || !e.project.trim()) throw new Error(`${path}: auto_ask[${i}].project must be a non-empty string`);
+    if (typeof e.advisor !== "string" || !e.advisor.trim()) throw new Error(`${path}: auto_ask[${i}].advisor must be a non-empty string`);
+    if (!advisorNames.has(e.advisor)) throw new Error(`${path}: auto_ask[${i}].advisor "${e.advisor}" is not in [[advisor]]`);
+    if (e.label !== undefined && typeof e.label !== "string") throw new Error(`${path}: auto_ask[${i}].label must be a string`);
+    if (e.brief !== undefined && typeof e.brief !== "string") throw new Error(`${path}: auto_ask[${i}].brief must be a string`);
+    return {
+      kind: e.kind,
+      project: e.project,
+      advisor: e.advisor,
+      ...(e.label !== undefined ? { label: e.label as string } : {}),
+      ...(e.brief !== undefined ? { brief: e.brief as string } : {}),
+    };
+  });
+}
 
 export const DEFAULT_CONFIG: HubConfig = {
   port: DEFAULT_PORT,
@@ -54,6 +114,8 @@ export const DEFAULT_CONFIG: HubConfig = {
     idle_ms: DEFAULT_IDLE_MS,
   },
   backups: { keep: DEFAULT_BACKUPS_KEEP },
+  advisors: [],
+  autoAsk: [],
 };
 
 function defaultSources(): ConfigSources {
@@ -62,6 +124,8 @@ function defaultSources(): ConfigSources {
     log_level: "default",
     limits: { attachment_bytes: "default", round_bytes: "default", pending_per_session: "default", live_ms: "default", idle_ms: "default" },
     backups: { keep: "default" },
+    advisors: "default",
+    autoAsk: "default",
   };
 }
 
@@ -141,6 +205,9 @@ export function loadConfigDetailed(path: string): LoadedConfig {
   const backupsTable = isRecord(raw.backups) ? raw.backups : undefined;
   const keep = pick(backupsTable, "keep", DEFAULT_CONFIG.backups.keep, isPosInt, path, "backups.keep must be a positive integer");
 
+  const advisors = parseAdvisors(raw.advisor, path);
+  const autoAsk = parseAutoAsk(raw.auto_ask, path, new Set(advisors.map((a) => a.name)));
+
   return {
     config: {
       port: port.value,
@@ -153,6 +220,8 @@ export function loadConfigDetailed(path: string): LoadedConfig {
         idle_ms: idle_ms.value,
       },
       backups: { keep: keep.value },
+      advisors,
+      autoAsk,
     },
     sources: {
       port: port.source,
@@ -165,6 +234,8 @@ export function loadConfigDetailed(path: string): LoadedConfig {
         idle_ms: idle_ms.source,
       },
       backups: { keep: keep.source },
+      advisors: "advisor" in raw ? "file" : "default",
+      autoAsk: "auto_ask" in raw ? "file" : "default",
     },
   };
 }
