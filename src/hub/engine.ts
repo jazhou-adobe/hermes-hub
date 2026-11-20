@@ -327,6 +327,28 @@ export class Engine {
       .map((row) => this.deliver(row));
   }
 
+  /**
+   * events: the caller's Round endings after `cursor`, oldest first, marking delivery the same way
+   * `inbox` does. `cursor` is a Round's SQLite `rowid`, which is already monotonic in insertion order
+   * and never reused, so no dedicated sequence column is needed. `null` means "nothing yet": a fresh
+   * connection listens for new endings only, rather than replaying the session's whole history.
+   */
+  eventsSince(session: SessionRow, cursor: number | null): { id: number; answer: Answer }[] {
+    if (cursor === null) return [];
+    return this.db
+      .query<RoundRow & { rowid: number }, [string, number]>(
+        `SELECT rowid, * FROM rounds WHERE session_id = ? AND status <> 'pending' AND rowid > ?
+         ORDER BY rowid`,
+      )
+      .all(session.id, cursor)
+      .map((row) => ({ id: row.rowid, answer: this.deliver(row) }));
+  }
+
+  /** The event cursor (SQLite `rowid`) of an ended Round, for the events stream's live `id:` line. */
+  eventCursor(id: string): number {
+    return this.db.query<{ rowid: number }, [string]>("SELECT rowid FROM rounds WHERE id = ?").get(id)!.rowid;
+  }
+
   // ── Command Center (the Human) ──────────────────────────────────────────
 
   /** The Feed: Pending Rounds and Rounds ended in place, in queue order. */

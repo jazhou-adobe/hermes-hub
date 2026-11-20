@@ -15,6 +15,7 @@ const USAGE = `usage:
   hermes wait <round-id> [--out <file>] [identity]
   hermes cancel <round-id> [identity]
   hermes inbox [--format lines|json] [identity]
+  hermes watch [identity]
 identity: [--label <label>] [--kind <kind>] [--session <id>]`;
 
 class UsageError extends Error {}
@@ -105,6 +106,12 @@ async function inbox(args: string[]): Promise<number> {
   return 0;
 }
 
+async function watch(args: string[]): Promise<number> {
+  const { values } = parse(args, identityOptions, 0);
+  await (await connect(values)).watch((answer) => printAnswer(answer));
+  return 0;
+}
+
 function runMigrate(): number {
   const db = openDb(dbPath());
   try {
@@ -140,6 +147,8 @@ async function main(argv: string[]): Promise<number | undefined> {
         return await cancel(rest);
       case "inbox":
         return await inbox(rest);
+      case "watch":
+        return await watch(rest);
       default:
         throw new UsageError(command ? `unknown command ${command}` : "missing command");
     }
