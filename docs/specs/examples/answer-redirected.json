@@ -1,0 +1,12 @@
+{
+  "schema": "hermes.answer/v1",
+  "round_id": "r_01jd3k8w2m",
+  "outcome": "redirected",
+  "message": "Don't migrate yet. Write the rollback script first and ask again.",
+  "questions": {
+    "strategy": { "value": null, "set_by": "none" },
+    "run_migration": { "value": null, "set_by": "none" },
+    "notes_for_reviewer": { "value": null, "set_by": "none" }
+  },
+  "decided_at": "2026-11-20T14:07:00Z"
+}
