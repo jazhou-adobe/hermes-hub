@@ -15,7 +15,8 @@ import {
 } from "../schema/validate.ts";
 import { VERSION } from "../version.ts";
 import { answerQuestions, lockValue, parseHumanValue, type Locks } from "./answers.ts";
-import { callsign } from "./callsign.ts";
+import { callsign, resolveCallsigns } from "./callsign.ts";
+import { RESUME } from "../kinds.ts";
 
 export interface SessionRow {
   id: string;
@@ -58,6 +59,22 @@ export interface FeedRoundView {
   answer: Answer | null;
 }
 
+/** An Agent session on the roster (agent-identity spec). */
+export interface AgentView {
+  id: string;
+  kind: string;
+  session_key: string;
+  label: string | null;
+  cwd: string | null;
+  callsign: string;
+  liveness: "live" | "idle" | "gone";
+  last_seen: string;
+  pending_count: number;
+  resume: string | null;
+  detection: { step: number; source: string; documented: boolean } | null;
+  signals: Record<string, unknown> | null;
+}
+
 export type HubEvent =
   | { type: "round.created"; view: FeedRoundView }
   | { type: "round.locked"; view: FeedRoundView }
@@ -66,7 +83,8 @@ export type HubEvent =
   /** A new Round took the place of `replaces`. */
   | { type: "round.superseded"; replaces: string; view: FeedRoundView }
   | { type: "round.removed"; round_id: string }
-  | { type: "draft.saved"; round_id: string; draft: Draft };
+  | { type: "draft.saved"; round_id: string; draft: Draft }
+  | { type: "session.forgotten"; session_id: string };
 
 export interface Clock {
   now(): number;
@@ -85,6 +103,10 @@ const LEAVES_FEED: Record<Outcome, boolean> = {
   expired: false,
   cancelled: false,
 };
+/** Liveness thresholds (agent-identity spec); Hub settings in config.toml from S10. */
+const LIVE_MS = 2 * 60_000;
+const IDLE_MS = 30 * 60_000;
+export type Liveness = "live" | "idle" | "gone";
 
 function newId(prefix: string): string {
   const bytes = crypto.getRandomValues(new Uint8Array(12));
@@ -97,6 +119,8 @@ function newId(prefix: string): string {
 export class Engine {
   private readonly listeners = new Set<(e: HubEvent) => void>();
   private timer: ReturnType<typeof setTimeout> | undefined;
+  /** Sessions with an open `wait`: always Live (agent-identity spec, rule 9). */
+  private readonly waiting = new Map<string, number>();
 
   constructor(
     private readonly db: Database,
@@ -149,7 +173,7 @@ export class Engine {
          ON CONFLICT (kind, session_key) DO UPDATE SET
            label = excluded.label, cwd = excluded.cwd, git = excluded.git, host = excluded.host,
            client_version = excluded.client_version, detection = excluded.detection, signals = excluded.signals,
-           last_seen = excluded.last_seen
+           last_seen = excluded.last_seen, forgotten_at = NULL
          RETURNING id, token, kind, session_key, label, cwd`,
       )
       .get({
@@ -289,11 +313,15 @@ export class Engine {
   wait(session: SessionRow, id: string, seconds: number, signal?: AbortSignal): Promise<Answer | PendingStatus> {
     const first = this.get(session, id);
     if (!("status" in first)) return Promise.resolve(first);
+    this.waiting.set(session.id, (this.waiting.get(session.id) ?? 0) + 1);
     const { promise, resolve } = Promise.withResolvers<Answer | PendingStatus>();
     const finish = () => {
       clearTimeout(timer);
       off();
       signal?.removeEventListener("abort", finish);
+      const left = (this.waiting.get(session.id) ?? 1) - 1;
+      if (left <= 0) this.waiting.delete(session.id);
+      else this.waiting.set(session.id, left);
       resolve(this.get(session, id));
     };
     const timer = setTimeout(finish, seconds * 1000);
@@ -331,12 +359,63 @@ export class Engine {
 
   /** The Feed: Pending Rounds and Rounds ended in place, in queue order. */
   feed(): FeedRoundView[] {
+    const callsigns = this.callsigns();
     return this.db
       .query<{ id: string }, []>(
         "SELECT id FROM rounds WHERE status = 'pending' OR feed_removed_at IS NULL ORDER BY position, rowid",
       )
       .all()
-      .map((r) => this.view(r.id)!);
+      .map((r) => this.view(r.id, callsigns)!);
+  }
+
+  /** The Agent roster: every session that has contacted the Hub and not been Forgotten. */
+  roster(): AgentView[] {
+    const rows = this.db
+      .query<
+        SessionRow & { last_seen: string; detection: string | null; signals: string | null },
+        []
+      >("SELECT * FROM sessions WHERE forgotten_at IS NULL ORDER BY last_seen DESC")
+      .all();
+    const pending = new Map(
+      this.db
+        .query<{ session_id: string; n: number }, []>(
+          "SELECT session_id, count(*) AS n FROM rounds WHERE status = 'pending' GROUP BY session_id",
+        )
+        .all()
+        .map((p) => [p.session_id, p.n]),
+    );
+    const nowMs = this.clock.now();
+    const withLiveness = rows.map((r) => ({ ...r, liveness: this.liveness(r.last_seen, r.id, nowMs) }));
+    const callsigns = resolveCallsigns(withLiveness);
+    return withLiveness.map((r) => ({
+      id: r.id,
+      kind: r.kind,
+      session_key: r.session_key,
+      label: r.label,
+      cwd: r.cwd,
+      callsign: callsigns.get(r.id)!,
+      liveness: r.liveness,
+      last_seen: r.last_seen,
+      pending_count: pending.get(r.id) ?? 0,
+      resume: RESUME[r.kind]?.(r.session_key) ?? null,
+      detection: r.detection && JSON.parse(r.detection),
+      signals: r.signals && JSON.parse(r.signals),
+    }));
+  }
+
+  /** Forget: cancels the Agent's pending Rounds and hides it from the roster until it next contacts the Hub. */
+  forget(sessionId: string): void {
+    const events: HubEvent[] = [];
+    this.db.transaction(() => {
+      const pending = this.db
+        .query<RoundRow, [string]>("SELECT * FROM rounds WHERE session_id = ? AND status = 'pending'")
+        .all(sessionId);
+      for (const row of pending) events.push(this.end(row, "cancelled", { cancelled_by: "human" }));
+      const found = this.db.query("UPDATE sessions SET forgotten_at = ? WHERE id = ?").run(this.now(), sessionId);
+      if (found.changes === 0) throw new HubError("not_found", `no session ${sessionId}`);
+    })();
+    this.emit([...events, { type: "session.forgotten", session_id: sessionId }]);
+    this.schedule();
   }
 
   saveDraft(id: string, draft: unknown): void {
@@ -462,6 +541,25 @@ export class Engine {
     return row;
   }
 
+  private liveness(lastSeen: string, sessionId: string, nowMs: number): Liveness {
+    if (this.waiting.has(sessionId)) return "live";
+    const age = nowMs - Date.parse(lastSeen);
+    if (age <= LIVE_MS) return "live";
+    if (age <= IDLE_MS) return "idle";
+    return "gone";
+  }
+
+  /** Clash-aware callsigns for every active session (agent-identity spec: shared by the Feed and the roster). */
+  private callsigns(): Map<string, string> {
+    const rows = this.db
+      .query<SessionRow & { last_seen: string }, []>(
+        "SELECT id, token, kind, session_key, label, cwd, last_seen FROM sessions WHERE forgotten_at IS NULL",
+      )
+      .all();
+    const nowMs = this.clock.now();
+    return resolveCallsigns(rows.map((r) => ({ ...r, liveness: this.liveness(r.last_seen, r.id, nowMs) })));
+  }
+
   private nextDeadline(id: string): string | null {
     return (
       this.db.query<{ d: string | null }, [string]>("SELECT min(deadline) AS d FROM question_deadlines WHERE round_id = ?").get(id)?.d ??
@@ -515,7 +613,7 @@ export class Engine {
     return { type: "round.ended", round_id: row.id, answer, view: removed ? null : this.view(row.id) };
   }
 
-  private view(id: string): FeedRoundView | null {
+  private view(id: string, callsigns?: Map<string, string>): FeedRoundView | null {
     const r = this.db
       .query<RoundRow & { kind: string; session_key: string; label: string | null; cwd: string | null }, [string]>(
         "SELECT r.*, s.kind, s.session_key, s.label, s.cwd FROM rounds r JOIN sessions s ON s.id = r.session_id WHERE r.id = ?",
@@ -530,7 +628,7 @@ export class Engine {
       status: r.status,
       position: r.position,
       received_at: r.received_at,
-      session: { id: r.session_id, kind: r.kind, callsign: callsign(r) },
+      session: { id: r.session_id, kind: r.kind, callsign: callsigns?.get(r.session_id) ?? this.callsigns().get(r.session_id) ?? callsign(r) },
       round: JSON.parse(r.round),
       locks: JSON.parse(r.locks),
       deadlines: Object.fromEntries(deadlines.map((d) => [d.question_id, d.deadline])),
