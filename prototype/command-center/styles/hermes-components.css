@@ -1,0 +1,2016 @@
+/*
+ * Hermes Hub component styles: core inventory and domain widgets. Tokens only; raw values live in tokens/.
+ * Imported into @layer components by app/globals.css, so world skins (unlayered) win without raising specificity.
+ * Class contract: .hh-<component>; variants via data-variant, sizes via data-size, state via ARIA or data-state.
+ */
+
+/* ---------- Text and layout helpers ---------- */
+
+.hh-display,
+.hh-heading-lg,
+.hh-heading-md,
+.hh-body-lg,
+.hh-body,
+.hh-body-sm,
+.hh-label,
+.hh-mono,
+.hh-mono-sm,
+.hh-strip-header {
+  margin: 0;
+}
+
+.hh-display {
+  font-family: var(--hh-type-display-family);
+  font-size: var(--hh-type-display-size);
+  line-height: var(--hh-type-display-line-height);
+  font-weight: var(--hh-type-display-weight);
+  letter-spacing: var(--hh-letter-spacing-tight);
+  text-transform: uppercase;
+}
+
+.hh-heading-lg {
+  font-family: var(--hh-type-heading-lg-family);
+  font-size: var(--hh-type-heading-lg-size);
+  line-height: var(--hh-type-heading-lg-line-height);
+  font-weight: var(--hh-type-heading-lg-weight);
+  text-transform: uppercase;
+}
+
+.hh-heading-md {
+  font-family: var(--hh-type-heading-md-family);
+  font-size: var(--hh-type-heading-md-size);
+  line-height: var(--hh-type-heading-md-line-height);
+  font-weight: var(--hh-type-heading-md-weight);
+}
+
+.hh-body-lg {
+  font-family: var(--hh-type-body-lg-family);
+  font-size: var(--hh-type-body-lg-size);
+  line-height: var(--hh-type-body-lg-line-height);
+  font-weight: var(--hh-type-body-lg-weight);
+}
+
+.hh-body {
+  font-family: var(--hh-type-body-family);
+  font-size: var(--hh-type-body-size);
+  line-height: var(--hh-type-body-line-height);
+  font-weight: var(--hh-type-body-weight);
+}
+
+.hh-body-sm {
+  font-family: var(--hh-type-body-sm-family);
+  font-size: var(--hh-type-body-sm-size);
+  line-height: var(--hh-type-body-sm-line-height);
+  font-weight: var(--hh-type-body-sm-weight);
+}
+
+.hh-label {
+  font-family: var(--hh-type-label-family);
+  font-size: var(--hh-type-label-size);
+  line-height: var(--hh-type-label-line-height);
+  font-weight: var(--hh-type-label-weight);
+}
+
+.hh-mono {
+  font-family: var(--hh-type-mono-family);
+  font-size: var(--hh-type-mono-size);
+  line-height: var(--hh-type-mono-line-height);
+  font-weight: var(--hh-type-mono-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+.hh-mono-sm {
+  font-family: var(--hh-type-mono-sm-family);
+  font-size: var(--hh-type-mono-sm-size);
+  line-height: var(--hh-type-mono-sm-line-height);
+  font-weight: var(--hh-type-mono-sm-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+.hh-strip-header {
+  font-family: var(--hh-type-strip-header-family);
+  font-size: var(--hh-type-strip-header-size);
+  line-height: var(--hh-type-strip-header-line-height);
+  font-weight: var(--hh-type-strip-header-weight);
+  letter-spacing: var(--hh-letter-spacing-caps);
+  text-transform: uppercase;
+}
+
+.hh-caps {
+  text-transform: uppercase;
+  letter-spacing: var(--hh-letter-spacing-caps);
+}
+
+.hh-muted {
+  color: var(--hh-muted-foreground);
+}
+
+.hh-measure {
+  max-width: var(--hh-layout-measure);
+}
+
+.hh-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hh-density-gap);
+  min-width: 0;
+}
+
+.hh-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hh-space-2);
+  min-width: 0;
+}
+
+.hh-grid {
+  display: grid;
+  gap: var(--hh-density-gap);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--hh-overlay-popover-width)), 1fr));
+}
+
+.hh-visually-hidden {
+  position: absolute;
+  width: var(--hh-border-width-thin);
+  height: var(--hh-border-width-thin);
+  margin: calc(var(--hh-border-width-thin) * -1);
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.hh-icon {
+  width: var(--hh-icon-size);
+  height: var(--hh-icon-size);
+  flex: none;
+  vertical-align: middle;
+}
+
+/* ---------- Chrome and navigation ---------- */
+
+.hh-skip-link {
+  position: absolute;
+  inset-inline-start: var(--hh-space-2);
+  top: var(--hh-space-2);
+  z-index: var(--hh-layer-skip-link);
+  padding: var(--hh-density-control-padding-block) var(--hh-density-control-padding-inline);
+  background: var(--hh-primary);
+  color: var(--hh-primary-foreground);
+  border-radius: var(--hh-radius-md);
+  font-weight: var(--hh-font-weight-bold);
+  transform: translateY(-200%);
+}
+
+.hh-skip-link:focus-visible {
+  transform: none;
+}
+
+.hh-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: var(--hh-border-width-thin);
+  text-underline-offset: var(--hh-space-1);
+}
+
+.hh-link:hover {
+  text-decoration-thickness: var(--hh-border-width-thick);
+}
+
+.hh-app-bar {
+  position: sticky;
+  top: 0;
+  z-index: var(--hh-layer-sticky);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hh-density-gap);
+  padding: var(--hh-space-2) var(--hh-density-inset);
+  background: var(--hh-surface-tray);
+  color: var(--hh-surface-tray-foreground);
+  border-bottom: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+.hh-app-bar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hh-space-2);
+  font-family: var(--hh-type-strip-header-family);
+  font-size: var(--hh-type-strip-header-size);
+  font-weight: var(--hh-font-weight-heavy);
+  letter-spacing: var(--hh-letter-spacing-caps);
+  text-transform: uppercase;
+}
+
+.hh-app-bar-spacer {
+  flex: 1;
+}
+
+.hh-side-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hh-space-1);
+}
+
+.hh-side-nav a,
+.hh-bottom-nav a {
+  display: flex;
+  align-items: center;
+  gap: var(--hh-space-2);
+  min-height: var(--hh-button-min-target);
+  padding: 0 var(--hh-density-control-padding-inline);
+  border-radius: var(--hh-radius-md);
+  color: inherit;
+  text-decoration: none;
+  font-family: var(--hh-type-label-family);
+  font-size: var(--hh-type-label-size);
+  font-weight: var(--hh-type-label-weight);
+}
+
+.hh-side-nav a:hover,
+.hh-bottom-nav a:hover {
+  background: var(--hh-muted);
+  color: var(--hh-foreground);
+}
+
+/* Current page: accent fill plus a non-colour cue, a heavier label and a square marker before it. */
+.hh-side-nav a[aria-current='page'],
+.hh-bottom-nav a[aria-current='page'] {
+  background: var(--hh-accent);
+  color: var(--hh-accent-foreground);
+  font-weight: var(--hh-font-weight-heavy);
+}
+
+.hh-side-nav a[aria-current='page']::before,
+.hh-bottom-nav a[aria-current='page']::before {
+  content: '';
+  flex: none;
+  width: var(--hh-space-2);
+  height: var(--hh-space-2);
+  background: currentColor;
+}
+
+.hh-side-nav-count {
+  margin-inline-start: auto;
+  font-family: var(--hh-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.hh-bottom-nav {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: var(--hh-space-1);
+  padding: var(--hh-space-1);
+  background: var(--hh-surface-tray);
+  color: var(--hh-surface-tray-foreground);
+  border-top: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+.hh-bottom-nav a {
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--hh-space-1);
+  text-align: center;
+}
+
+.hh-breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hh-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hh-breadcrumbs li + li::before {
+  content: '/';
+  margin-inline-end: var(--hh-space-2);
+  color: var(--hh-muted-foreground);
+}
+
+.hh-breadcrumbs [aria-current='page'] {
+  font-weight: var(--hh-font-weight-bold);
+}
+
+/* ---------- Actions ---------- */
+
+.hh-button,
+.hh-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--hh-space-2);
+  min-height: var(--hh-button-min-target);
+  min-width: var(--hh-button-min-target);
+  padding: var(--hh-density-control-padding-block) var(--hh-density-control-padding-inline);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-md);
+  background: var(--hh-secondary);
+  color: var(--hh-secondary-foreground);
+  font-family: var(--hh-type-label-family);
+  font-size: var(--hh-type-label-size);
+  line-height: var(--hh-type-label-line-height);
+  font-weight: var(--hh-type-label-weight);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--hh-motion-fast) var(--hh-easing-standard),
+    border-color var(--hh-motion-fast) var(--hh-easing-standard),
+    transform var(--hh-motion-fast) var(--hh-easing-standard);
+}
+
+.hh-icon-button {
+  padding: 0;
+  width: var(--hh-button-min-target);
+}
+
+.hh-button:hover,
+.hh-icon-button:hover {
+  border-color: var(--hh-foreground);
+}
+
+.hh-button:active:not(:disabled, [aria-disabled='true']),
+.hh-icon-button:active:not(:disabled, [aria-disabled='true']) {
+  transform: scale(var(--hh-press-scale));
+}
+
+.hh-button[data-variant='primary'] {
+  background: var(--hh-primary);
+  border-color: var(--hh-primary);
+  color: var(--hh-primary-foreground);
+}
+
+.hh-button[data-variant='primary']:hover {
+  outline: var(--hh-border-width-thin) solid var(--hh-primary-foreground);
+  outline-offset: calc(var(--hh-border-width-thick) * -2);
+}
+
+.hh-button[data-variant='destructive'] {
+  background: var(--hh-destructive);
+  border-color: var(--hh-destructive);
+  color: var(--hh-destructive-foreground);
+}
+
+.hh-button[data-variant='destructive']:hover {
+  outline: var(--hh-border-width-thin) solid var(--hh-destructive-foreground);
+  outline-offset: calc(var(--hh-border-width-thick) * -2);
+}
+
+.hh-button[data-variant='ghost'],
+.hh-icon-button[data-variant='ghost'] {
+  background: transparent;
+  border-color: transparent;
+  color: inherit;
+}
+
+.hh-button[data-variant='ghost']:hover,
+.hh-icon-button[data-variant='ghost']:hover {
+  border-color: var(--hh-border);
+}
+
+.hh-button[data-size='sm'],
+.hh-icon-button[data-size='sm'] {
+  min-height: var(--hh-control-size-sm);
+  min-width: var(--hh-control-size-sm);
+  padding-block: 0;
+}
+
+.hh-icon-button[data-size='sm'] {
+  width: var(--hh-control-size-sm);
+}
+
+.hh-button[data-size='lg'] {
+  min-height: var(--hh-control-size-lg);
+  font-size: var(--hh-type-body-lg-size);
+}
+
+.hh-button:disabled,
+.hh-button[aria-disabled='true'],
+.hh-icon-button:disabled {
+  opacity: var(--hh-opacity-disabled);
+  cursor: not-allowed;
+}
+
+.hh-button[aria-pressed='true'] {
+  border-width: var(--hh-border-width-thick);
+  border-color: var(--hh-foreground);
+}
+
+/* ---------- Inputs and fields ---------- */
+
+.hh-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hh-space-1);
+  min-width: 0;
+}
+
+fieldset.hh-field {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.hh-hint {
+  margin: 0;
+  color: var(--hh-muted-foreground);
+  font-size: var(--hh-type-body-sm-size);
+  line-height: var(--hh-type-body-sm-line-height);
+}
+
+.hh-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hh-space-2);
+  margin: 0;
+  font-size: var(--hh-type-body-sm-size);
+  line-height: var(--hh-type-body-sm-line-height);
+}
+
+.hh-input,
+.hh-select,
+.hh-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--hh-button-min-target);
+  padding: var(--hh-density-control-padding-block) var(--hh-density-control-padding-inline);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-md);
+  background: var(--hh-input);
+  color: var(--hh-foreground);
+  font: inherit;
+}
+
+.hh-textarea {
+  min-height: calc(var(--hh-button-min-target) * 2);
+  resize: vertical;
+}
+
+.hh-input::placeholder,
+.hh-textarea::placeholder {
+  color: var(--hh-muted-foreground);
+  opacity: 1;
+}
+
+.hh-input[aria-invalid='true'],
+.hh-textarea[aria-invalid='true'],
+.hh-select[aria-invalid='true'] {
+  border-color: var(--hh-destructive);
+  border-width: var(--hh-border-width-thick);
+}
+
+.hh-checkbox,
+.hh-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hh-space-2);
+  min-height: var(--hh-button-min-target);
+  cursor: pointer;
+}
+
+.hh-checkbox input,
+.hh-radio input {
+  width: var(--hh-icon-size);
+  height: var(--hh-icon-size);
+  margin: 0;
+  accent-color: var(--hh-accent);
+  flex: none;
+}
+
+/* Choice marks on strip paper are drawn in strip ink, so they read the same whatever colour-scheme the board uses. */
+.hh-option input {
+  appearance: none;
+  display: grid;
+  place-content: center;
+  box-sizing: border-box;
+  width: var(--hh-icon-size);
+  height: var(--hh-icon-size);
+  margin: 0;
+  border: var(--hh-border-width-thick) solid var(--hh-strip-foreground);
+  border-radius: var(--hh-radius-sm);
+  background: var(--hh-strip);
+  cursor: pointer;
+}
+
+.hh-option input[type='radio'] {
+  border-radius: var(--hh-radius-pill);
+}
+
+.hh-option input::before {
+  content: '';
+  width: calc(var(--hh-icon-size) * 0.45);
+  height: calc(var(--hh-icon-size) * 0.45);
+  border-radius: inherit;
+  background: var(--hh-strip-foreground);
+  transform: scale(0);
+  transition: transform var(--hh-motion-fast) var(--hh-easing-standard);
+}
+
+.hh-option input:checked::before {
+  transform: scale(1);
+}
+
+.hh-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hh-space-2);
+  min-height: var(--hh-button-min-target);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hh-switch-track {
+  position: relative;
+  display: inline-block;
+  width: calc(var(--hh-callsign-chip-height) * 1.75);
+  height: var(--hh-callsign-chip-height);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-sm);
+  background: var(--hh-muted);
+}
+
+.hh-switch-thumb {
+  position: absolute;
+  top: var(--hh-border-width-thick);
+  bottom: var(--hh-border-width-thick);
+  inset-inline-start: var(--hh-border-width-thick);
+  width: calc(var(--hh-callsign-chip-height) * 0.7);
+  border-radius: var(--hh-radius-sm);
+  background: var(--hh-muted-foreground);
+  transition: transform var(--hh-motion-fast) var(--hh-easing-standard);
+}
+
+.hh-switch[aria-checked='true'] .hh-switch-track {
+  background: var(--hh-accent);
+  border-color: var(--hh-accent);
+}
+
+.hh-switch[aria-checked='true'] .hh-switch-thumb {
+  background: var(--hh-accent-foreground);
+  transform: translateX(calc(var(--hh-callsign-chip-height) * 0.85));
+}
+
+.hh-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hh-space-1);
+  min-height: var(--hh-control-size-sm);
+  padding: 0 var(--hh-space-3);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-sm);
+  background: transparent;
+  color: inherit;
+  font-family: var(--hh-type-label-family);
+  font-size: var(--hh-type-label-size);
+  font-weight: var(--hh-type-label-weight);
+  cursor: pointer;
+}
+
+.hh-chip[aria-pressed='true'] {
+  background: var(--hh-accent);
+  border-color: var(--hh-accent);
+  color: var(--hh-accent-foreground);
+}
+
+.hh-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hh-space-1);
+  border-bottom: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+.hh-tab {
+  min-height: var(--hh-button-min-target);
+  padding: 0 var(--hh-density-control-padding-inline);
+  border: 0;
+  border-bottom: var(--hh-border-width-heavy) solid transparent;
+  background: transparent;
+  color: var(--hh-muted-foreground);
+  font-family: var(--hh-type-label-family);
+  font-size: var(--hh-type-label-size);
+  font-weight: var(--hh-type-label-weight);
+  cursor: pointer;
+}
+
+.hh-tab[aria-selected='true'] {
+  color: var(--hh-foreground);
+  border-bottom-color: var(--hh-accent);
+}
+
+.hh-tab-panel {
+  padding-top: var(--hh-density-gap);
+}
+
+/* ---------- Containers ---------- */
+
+.hh-card,
+.hh-panel,
+.hh-shelf,
+.hh-tray {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: var(--hh-density-inset);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-md);
+}
+
+.hh-card {
+  background: var(--hh-surface-card);
+  color: var(--hh-surface-card-foreground);
+  box-shadow: var(--hh-elevation-raised);
+}
+
+.hh-panel {
+  background: var(--hh-surface-panel);
+  color: var(--hh-surface-panel-foreground);
+}
+
+.hh-shelf {
+  background: var(--hh-surface-shelf);
+  color: var(--hh-surface-shelf-foreground);
+  border-style: dashed;
+}
+
+.hh-tray {
+  background: var(--hh-surface-tray);
+  color: var(--hh-surface-tray-foreground);
+  border-radius: 0;
+  border-inline: 0;
+}
+
+.hh-divider {
+  margin: 0;
+  border: 0;
+  border-top: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+/* ---------- Feedback ---------- */
+
+.hh-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hh-space-1);
+  padding: 0 var(--hh-space-2);
+  border-radius: var(--hh-radius-sm);
+  background: var(--hh-secondary);
+  color: var(--hh-secondary-foreground);
+  font-family: var(--hh-type-label-family);
+  font-size: var(--hh-type-mono-sm-size);
+  line-height: var(--hh-type-label-line-height);
+  font-weight: var(--hh-font-weight-bold);
+  letter-spacing: var(--hh-letter-spacing-caps);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.hh-badge[data-tone='success'] {
+  background: var(--hh-success);
+  color: var(--hh-success-foreground);
+}
+
+.hh-badge[data-tone='warning'] {
+  background: var(--hh-warning);
+  color: var(--hh-warning-foreground);
+}
+
+.hh-badge[data-tone='info'] {
+  background: var(--hh-info);
+  color: var(--hh-info-foreground);
+}
+
+.hh-badge[data-tone='destructive'] {
+  background: var(--hh-destructive);
+  color: var(--hh-destructive-foreground);
+}
+
+.hh-badge[data-tone='pending'] {
+  background: var(--hh-pending);
+  color: var(--hh-pending-foreground);
+}
+
+.hh-badge[data-tone='answered'] {
+  background: var(--hh-answered);
+  color: var(--hh-answered-foreground);
+}
+
+.hh-badge[data-tone='expired'] {
+  background: var(--hh-expired);
+  color: var(--hh-expired-foreground);
+}
+
+.hh-alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--hh-space-1) var(--hh-space-3);
+  align-items: start;
+  padding: var(--hh-density-inset);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-md);
+  background: var(--hh-surface-card);
+  color: var(--hh-surface-card-foreground);
+}
+
+.hh-alert > :not(.hh-badge) {
+  grid-column: 2;
+  margin: 0;
+}
+
+.hh-alert > .hh-badge {
+  grid-row: 1 / span 2;
+}
+
+.hh-alert[data-tone='warning'] {
+  border-color: var(--hh-warning);
+}
+
+.hh-alert[data-tone='destructive'] {
+  border-color: var(--hh-destructive);
+}
+
+.hh-alert[data-tone='success'] {
+  border-color: var(--hh-success);
+}
+
+.hh-alert[data-tone='info'] {
+  border-color: var(--hh-info);
+}
+
+.hh-toast-region {
+  position: fixed;
+  inset-inline-end: var(--hh-density-inset);
+  bottom: var(--hh-density-inset);
+  z-index: var(--hh-layer-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--hh-space-2);
+  max-width: min(calc(100vw - var(--hh-density-inset) * 2), var(--hh-overlay-dialog-width));
+  pointer-events: none;
+}
+
+.hh-toast {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hh-space-2) var(--hh-space-3);
+  padding: var(--hh-space-3) var(--hh-density-inset);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-md);
+  background: var(--hh-surface-tray);
+  color: var(--hh-surface-tray-foreground);
+  box-shadow: var(--hh-elevation-overlay);
+  pointer-events: auto;
+  animation: hh-enter var(--hh-motion-standard) var(--hh-easing-enter);
+}
+
+.hh-toast[data-placement='inline'] {
+  position: static;
+  animation: none;
+}
+
+.hh-progress {
+  display: grid;
+  gap: var(--hh-space-1);
+}
+
+.hh-progress-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--hh-space-2);
+}
+
+.hh-progress-track {
+  height: var(--hh-progress-track-height);
+  overflow: hidden;
+  border-radius: var(--hh-radius-sm);
+  background: var(--hh-muted);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+.hh-progress-fill {
+  height: 100%;
+  background: var(--hh-primary);
+  transform-origin: left center;
+  transform: scaleX(var(--progress-value, 0));
+  transition: transform var(--hh-motion-standard) var(--hh-easing-standard);
+}
+
+.hh-spinner {
+  display: inline-block;
+  width: var(--hh-icon-size);
+  height: var(--hh-icon-size);
+  border: var(--hh-border-width-thick) solid var(--hh-muted);
+  border-top-color: var(--hh-foreground);
+  border-radius: var(--hh-radius-pill);
+  animation: hh-spin var(--hh-motion-pulse) var(--hh-easing-linear) infinite;
+}
+
+.hh-skeleton {
+  display: block;
+  min-height: var(--hh-type-body-size);
+  border-radius: var(--hh-radius-sm);
+  background: var(--hh-muted);
+  animation: hh-fade var(--hh-motion-pulse) var(--hh-easing-standard) 3 alternate;
+}
+
+.hh-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: var(--hh-space-3);
+  padding: var(--hh-space-8) var(--hh-density-inset);
+  border: var(--hh-border-width-thick) dashed var(--hh-border);
+  border-radius: var(--hh-radius-md);
+  text-align: center;
+}
+
+.hh-empty-state > * {
+  margin: 0;
+}
+
+/* ---------- Overlays ---------- */
+
+.hh-dialog,
+.hh-sheet {
+  box-sizing: border-box;
+  /* Native showModal() puts these in the top layer; the layer token covers non-modal or polyfilled use. */
+  z-index: var(--hh-layer-overlay);
+  padding: 0;
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  background: var(--hh-surface-panel);
+  color: var(--hh-surface-panel-foreground);
+  box-shadow: var(--hh-elevation-overlay);
+}
+
+.hh-dialog {
+  width: min(calc(100vw - var(--hh-space-8)), var(--hh-overlay-dialog-width));
+  border-radius: var(--hh-radius-lg);
+}
+
+.hh-dialog[open] {
+  animation: hh-pop var(--hh-motion-panel) var(--hh-easing-enter);
+}
+
+.hh-sheet {
+  margin: 0 0 0 auto;
+  width: min(100vw, var(--hh-overlay-drawer-width));
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  border-radius: 0;
+}
+
+.hh-sheet[open] {
+  animation: hh-slide var(--hh-motion-panel) var(--hh-easing-drawer);
+}
+
+.hh-dialog::backdrop,
+.hh-sheet::backdrop {
+  background: var(--hh-scrim);
+}
+
+.hh-overlay-head,
+.hh-overlay-body,
+.hh-overlay-foot {
+  padding: var(--hh-density-inset);
+}
+
+.hh-overlay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hh-space-3);
+  border-bottom: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+.hh-overlay-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--hh-space-2);
+  border-top: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+.hh-popover {
+  box-sizing: border-box;
+  z-index: var(--hh-layer-popover);
+  width: min(calc(100vw - var(--hh-space-8)), var(--hh-overlay-popover-width));
+  padding: var(--hh-density-inset);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-md);
+  background: var(--hh-surface-card);
+  color: var(--hh-surface-card-foreground);
+  box-shadow: var(--hh-elevation-overlay);
+}
+
+.hh-tooltip-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.hh-tooltip {
+  position: absolute;
+  bottom: calc(100% + var(--hh-space-2));
+  inset-inline-start: 50%;
+  z-index: var(--hh-layer-tooltip);
+  width: max-content;
+  max-width: var(--hh-overlay-tooltip-width);
+  padding: var(--hh-space-1) var(--hh-space-2);
+  border-radius: var(--hh-radius-sm);
+  background: var(--hh-foreground);
+  color: var(--hh-background);
+  font-size: var(--hh-type-body-sm-size);
+  line-height: var(--hh-type-body-sm-line-height);
+  transform: translateX(-50%);
+  /* Out of layout while hidden, so a tooltip near the edge never widens the page. */
+  display: none;
+  pointer-events: none;
+}
+
+.hh-tooltip-anchor:hover .hh-tooltip,
+.hh-tooltip-anchor:focus-within .hh-tooltip {
+  display: block;
+}
+
+.hh-menu-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.hh-menu {
+  position: absolute;
+  top: calc(100% + var(--hh-space-1));
+  inset-inline-start: 0;
+  z-index: var(--hh-layer-dropdown);
+  display: flex;
+  flex-direction: column;
+  min-width: var(--hh-overlay-menu-width);
+  padding: var(--hh-space-1);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-md);
+  background: var(--hh-surface-card);
+  color: var(--hh-surface-card-foreground);
+  box-shadow: var(--hh-elevation-overlay);
+}
+
+.hh-menu [role='menuitem'] {
+  display: flex;
+  align-items: center;
+  gap: var(--hh-space-2);
+  min-height: var(--hh-button-min-target);
+  padding: 0 var(--hh-space-3);
+  border: 0;
+  border-radius: var(--hh-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.hh-menu [role='menuitem']:hover,
+.hh-menu [role='menuitem']:focus-visible {
+  background: var(--hh-accent);
+  color: var(--hh-accent-foreground);
+  outline: none;
+}
+
+.hh-menu [role='menuitem'][data-variant='destructive'] {
+  color: inherit;
+}
+
+/* ---------- Data display ---------- */
+
+.hh-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.hh-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--hh-type-body-size);
+}
+
+.hh-table th,
+.hh-table td {
+  height: var(--hh-density-row-height);
+  padding: 0 var(--hh-space-3);
+  border-bottom: var(--hh-border-width-thin) solid var(--hh-border);
+  text-align: start;
+  vertical-align: middle;
+}
+
+.hh-table th {
+  color: var(--hh-muted-foreground);
+  font-family: var(--hh-type-label-family);
+  font-size: var(--hh-type-mono-sm-size);
+  font-weight: var(--hh-font-weight-bold);
+  letter-spacing: var(--hh-letter-spacing-caps);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.hh-table td[data-numeric],
+.hh-table td.hh-mono {
+  font-family: var(--hh-font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.hh-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hh-list-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hh-space-2) var(--hh-space-3);
+  min-height: var(--hh-density-row-height);
+  padding: var(--hh-space-1) var(--hh-space-3);
+  border-bottom: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+.hh-list-row > .hh-list-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.hh-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: var(--hh-avatar-size-md);
+  height: var(--hh-avatar-size-md);
+  flex: none;
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-md);
+  background: var(--hh-secondary);
+  color: var(--hh-secondary-foreground);
+  font-family: var(--hh-font-mono);
+  font-size: var(--hh-type-mono-sm-size);
+  font-weight: var(--hh-font-weight-bold);
+}
+
+.hh-avatar[data-size='sm'] {
+  width: var(--hh-avatar-size-sm);
+  height: var(--hh-avatar-size-sm);
+  border-radius: var(--hh-radius-sm);
+}
+
+.hh-kbd {
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: var(--hh-kbd-size);
+  min-height: var(--hh-kbd-size);
+  padding: 0 var(--hh-space-1);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-bottom-width: var(--hh-border-width-thick);
+  border-radius: var(--hh-radius-sm);
+  background: var(--hh-surface-shelf);
+  color: var(--hh-surface-shelf-foreground);
+  font-family: var(--hh-type-mono-sm-family);
+  font-size: var(--hh-type-mono-sm-size);
+  line-height: var(--hh-type-mono-sm-line-height);
+  font-weight: var(--hh-type-mono-sm-weight);
+  text-transform: uppercase;
+}
+
+.hh-dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--hh-space-1) var(--hh-space-3);
+  margin: 0;
+}
+
+.hh-dl dt {
+  color: var(--hh-muted-foreground);
+  font-size: var(--hh-type-body-sm-size);
+}
+
+.hh-dl dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ================= Domain widgets ================= */
+
+/* ---------- Callsign chip: identity colour swatch + callsign text, never colour alone ---------- */
+
+.hh-callsign {
+  --agent-colour: var(--hh-agent-1);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hh-space-2);
+  box-sizing: border-box;
+  max-width: 100%;
+  min-height: var(--hh-callsign-chip-height);
+  padding: 0 var(--hh-space-2);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-sm);
+  background: var(--hh-surface-card);
+  color: var(--hh-surface-card-foreground);
+  font-family: var(--hh-type-mono-sm-family);
+  font-size: var(--hh-type-mono-sm-size);
+  line-height: var(--hh-type-mono-sm-line-height);
+  font-weight: var(--hh-type-mono-sm-weight);
+  white-space: nowrap;
+}
+
+.hh-callsign-mark {
+  width: calc(var(--hh-callsign-chip-height) * 0.45);
+  height: calc(var(--hh-callsign-chip-height) * 0.45);
+  flex: none;
+  background: var(--agent-colour);
+}
+
+.hh-callsign-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hh-callsign[data-agent='1'] { --agent-colour: var(--hh-agent-1); }
+.hh-callsign[data-agent='2'] { --agent-colour: var(--hh-agent-2); }
+.hh-callsign[data-agent='3'] { --agent-colour: var(--hh-agent-3); }
+.hh-callsign[data-agent='4'] { --agent-colour: var(--hh-agent-4); }
+.hh-callsign[data-agent='5'] { --agent-colour: var(--hh-agent-5); }
+.hh-callsign[data-agent='6'] { --agent-colour: var(--hh-agent-6); }
+
+/* ---------- Round strip in its holder ----------
+ * The holder is a frame in the status colour that wraps the paper strip on every side, with a tab carrying the status
+ * word. It is never a thin side stripe. The Unanswered Policy timer runs along the holder's bottom edge. */
+
+.hh-strip {
+  --holder: var(--hh-pending);
+  --holder-foreground: var(--hh-pending-foreground);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0 var(--hh-strip-holder-width) var(--hh-strip-holder-width);
+  border-radius: var(--hh-radius-sm);
+  background: var(--holder);
+  color: var(--holder-foreground);
+  box-shadow: var(--hh-elevation-raised);
+  transition: transform var(--hh-motion-standard) var(--hh-easing-standard);
+}
+
+.hh-strip[data-status='answered'] {
+  --holder: var(--hh-answered);
+  --holder-foreground: var(--hh-answered-foreground);
+}
+
+.hh-strip[data-status='expired'] {
+  --holder: var(--hh-expired);
+  --holder-foreground: var(--hh-expired-foreground);
+}
+
+.hh-strip[data-selected='true'] {
+  outline: var(--hh-focus-ring-width) solid var(--hh-ring);
+  outline-offset: var(--hh-focus-ring-offset);
+}
+
+/* In the bay a strip is a listbox option: the whole strip is the target. */
+.hh-strip[role='option'] {
+  cursor: pointer;
+}
+
+.hh-strip[role='option'][aria-disabled='true'] {
+  cursor: default;
+}
+
+/* In the phone pending list the head is a native button; its hit area stretches over the whole strip, holder included. */
+.hh-strip[data-mode='button'] {
+  position: relative;
+}
+
+.hh-strip[data-mode='button'] .hh-strip-head::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+/* Shared outgoing transition: an answered strip stays mounted as data-state="departing" for --hh-motion-signature,
+   then leaves. The core fades it; worlds may animate it (taxi, patch, dispatch). Reduced motion removes it at once. */
+.hh-strip[data-state='departing'] {
+  pointer-events: none;
+  animation: hh-depart var(--hh-motion-signature) var(--hh-easing-exit) both;
+}
+
+.hh-strip-tab {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hh-space-1) var(--hh-space-3);
+  padding: var(--hh-space-1) var(--hh-space-1);
+  font-family: var(--hh-type-label-family);
+  font-size: var(--hh-type-mono-sm-size);
+  line-height: var(--hh-type-mono-sm-line-height);
+  font-weight: var(--hh-font-weight-heavy);
+  letter-spacing: var(--hh-letter-spacing-caps);
+  text-transform: uppercase;
+}
+
+.hh-strip-tab .hh-mono-sm {
+  letter-spacing: var(--hh-letter-spacing-none);
+}
+
+.hh-strip-paper {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: var(--hh-strip-min-height);
+  border-radius: var(--hh-radius-sm);
+  background: var(--hh-strip);
+  color: var(--hh-strip-foreground);
+}
+
+/* Two rows like a paper flight strip: callsign block and time on top, the Round title and policy line beneath. */
+.hh-strip-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-areas:
+    'callsign meta'
+    'title title';
+  align-items: stretch;
+  width: 100%;
+  min-height: var(--hh-strip-min-height);
+  padding: 0;
+  border: 0;
+  border-radius: var(--hh-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.hh-strip-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hh-space-1) var(--hh-space-2);
+  min-width: 0;
+  padding: var(--hh-space-2) var(--hh-space-3);
+}
+
+.hh-strip-cell[data-cell='callsign'] {
+  grid-area: callsign;
+}
+
+.hh-strip-cell[data-cell='meta'] {
+  grid-area: meta;
+  justify-content: flex-end;
+  border-inline-start: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+.hh-strip-cell[data-cell='title'] {
+  grid-area: title;
+  flex-direction: column;
+  align-items: flex-start;
+  border-top: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+.hh-strip-title {
+  overflow-wrap: anywhere;
+}
+
+.hh-strip-policy {
+  font-size: var(--hh-type-body-sm-size);
+  line-height: var(--hh-type-body-sm-line-height);
+}
+
+.hh-strip-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--hh-space-2);
+  padding: var(--hh-space-3);
+  border-top: var(--hh-border-width-thin) solid var(--hh-border);
+  animation: hh-enter var(--hh-motion-panel) var(--hh-easing-enter);
+}
+
+.hh-strip-body[hidden] {
+  display: none;
+}
+
+.hh-strip-summary {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--hh-space-1) var(--hh-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hh-strip-summary li {
+  display: contents;
+}
+
+.hh-strip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hh-space-2);
+}
+
+/* Unanswered Policy timer: holder-foreground fill on the holder rail, shrinking as time runs out. */
+
+.hh-policy-timer {
+  display: block;
+  height: var(--hh-timer-track-height);
+  margin-top: var(--hh-strip-holder-width);
+  overflow: hidden;
+  border-radius: var(--hh-radius-sm);
+  background: var(--holder, var(--hh-muted));
+}
+
+.hh-policy-timer-fill {
+  display: block;
+  height: 100%;
+  background: var(--holder-foreground, var(--hh-foreground));
+  transform-origin: left center;
+  transform: scaleX(var(--timer-fraction, 1));
+  transition: transform var(--hh-motion-standard) var(--hh-easing-linear);
+}
+
+.hh-policy-timer[data-policy='wait'] .hh-policy-timer-fill {
+  transform: none;
+  background: repeating-linear-gradient(90deg, var(--holder-foreground) 0 var(--hh-space-2), transparent var(--hh-space-2) var(--hh-space-4));
+}
+
+.hh-policy-badge {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hh-space-2);
+}
+
+/* ---------- Strip bay: the rack of holders ---------- */
+
+.hh-strip-bay {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hh-density-gap);
+  min-width: 0;
+  padding: var(--hh-density-inset);
+  border-radius: var(--hh-radius-md);
+  background: var(--hh-surface-panel);
+  color: var(--hh-surface-panel-foreground);
+}
+
+/* Bay-status region: confirmations and policy outcomes, never over the open Round's Answer bar. It stays in the DOM (so
+   its first update is announced) but takes no room, and no stack gap, until a confirmation lands. */
+.hh-bay-status {
+  display: flex;
+  align-items: center;
+}
+
+.hh-bay-status:not(:has(.hh-toast)) {
+  margin-block-end: calc(var(--hh-density-gap) * -1);
+}
+
+.hh-bay-status > * {
+  flex: 1;
+  margin: 0;
+}
+
+/* ---------- Command layout: bay beside the open Round, or (narrow container) the pending list or the Round sheet ---------- */
+
+.hh-command {
+  container: hh-command / inline-size;
+  min-width: 0;
+}
+
+.hh-command-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--hh-density-gap);
+  align-items: start;
+}
+
+.hh-command-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--hh-density-gap);
+  min-width: 0;
+}
+
+@container hh-command (width >= 48rem) {
+  .hh-command-grid {
+    grid-template-columns: minmax(0, min(var(--hh-layout-bay-width), 40%)) minmax(0, 1fr);
+  }
+
+  /* Beside a long bay, the Round sheet stays in view as the page scrolls; its own body scrolls inside it. */
+  .hh-command-panel {
+    align-self: stretch;
+    align-content: start;
+  }
+
+  .hh-command-panel > .hh-round {
+    position: sticky;
+    top: var(--hh-space-4);
+  }
+
+  /* Side by side, the strip's holder already shows the policy and its timer, so the Round does not repeat it. */
+  .hh-round-policy {
+    display: none;
+  }
+}
+
+@container hh-command (width < 48rem) {
+  .hh-command[data-view='queue'] .hh-command-panel,
+  .hh-command[data-view='round'] .hh-strip-bay {
+    display: none;
+  }
+}
+
+.hh-strip-bay-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hh-space-2) var(--hh-space-4);
+}
+
+.hh-strip-bay-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hh-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hh-strip-bay-empty {
+  display: grid;
+  gap: var(--hh-space-2);
+}
+
+.hh-strip-bay-slot {
+  min-height: var(--hh-strip-min-height);
+  border: var(--hh-border-width-thin) dashed var(--hh-border);
+  border-radius: var(--hh-radius-sm);
+}
+
+/* ---------- Open Round: Questions beside their Answer slots ---------- */
+
+/* The open Round is a sheet: head on top, Questions scrolling inside, the Answer bar as its footer in normal flow, so the
+   bar never covers the head, the policy, or the first Question. */
+.hh-round {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: var(--hh-radius-md);
+  background: var(--hh-strip);
+  color: var(--hh-strip-foreground);
+  scroll-margin-top: calc(var(--hh-button-min-target) + var(--hh-space-4));
+}
+
+/* The Round fits the viewport space below its top offset (--round-top, measured by the bay when the Round starts in the
+   first half of the viewport), so Send shows on entry and only the Question body scrolls. Deeper in a long page it falls
+   back to the sticky fit below the app bar. */
+.hh-round:has(> .hh-round-body) {
+  max-height: calc(100dvh - var(--round-top, calc(var(--hh-button-min-target) + var(--hh-space-4))) - var(--hh-density-inset));
+}
+
+.hh-round-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.hh-round-back {
+  justify-self: start;
+}
+
+.hh-round-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--hh-space-2);
+  padding: var(--hh-density-inset);
+  border-bottom: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+.hh-round-questions {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hh-question {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--hh-space-3) var(--hh-space-6);
+  padding: var(--hh-density-inset);
+  border-bottom: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+.hh-question[data-current='true'] {
+  outline: var(--hh-border-width-thin) solid var(--hh-ring);
+  outline-offset: calc(var(--hh-border-width-thin) * -1);
+}
+
+.hh-question[data-current='true']:focus-within {
+  outline-width: var(--hh-border-width-thick);
+  outline-offset: calc(var(--hh-border-width-thick) * -1);
+}
+
+.hh-question-call {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--hh-space-2);
+  align-content: start;
+  min-width: 0;
+}
+
+.hh-question-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hh-space-2);
+}
+
+.hh-question-prompt {
+  margin: 0;
+  font-family: var(--hh-type-body-lg-family);
+  font-size: var(--hh-type-body-lg-size);
+  line-height: var(--hh-type-body-lg-line-height);
+  font-weight: var(--hh-font-weight-semibold);
+}
+
+.hh-question-response {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--hh-space-2);
+  align-content: start;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* Choice rows sit on the paper separated by hairlines; only a chosen row gets a full, heavy boundary. */
+.hh-option {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(0, 1fr);
+  align-items: center;
+  gap: var(--hh-space-1) var(--hh-space-3);
+  box-sizing: border-box;
+  min-height: var(--hh-option-row-min-height);
+  padding: var(--hh-space-1) var(--hh-space-3);
+  border: var(--hh-border-width-thick) solid transparent;
+  border-radius: var(--hh-radius-sm);
+  background: var(--hh-strip);
+  color: var(--hh-strip-foreground);
+  cursor: pointer;
+}
+
+.hh-option + .hh-option {
+  border-top: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+.hh-option:has(input:checked),
+.hh-option + .hh-option:has(input:checked) {
+  border: var(--hh-border-width-thick) solid var(--hh-strip-foreground);
+}
+
+.hh-option-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hh-space-2);
+}
+
+.hh-option-text {
+  display: grid;
+  justify-items: start;
+  gap: var(--hh-space-1);
+  min-width: 0;
+}
+
+.hh-option-detail {
+  font-size: var(--hh-type-body-sm-size);
+  line-height: var(--hh-type-body-sm-line-height);
+}
+
+.hh-recommended {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hh-space-1);
+  padding: 0 var(--hh-space-2);
+  border-radius: var(--hh-radius-sm);
+  background: var(--hh-recommended);
+  color: var(--hh-recommended-foreground);
+  font-family: var(--hh-type-label-family);
+  font-size: var(--hh-type-mono-sm-size);
+  line-height: var(--hh-type-label-line-height);
+  font-weight: var(--hh-font-weight-bold);
+  letter-spacing: var(--hh-letter-spacing-caps);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Approve / reject: a two-option radio group. Each row reads as a key on the paper; side by side while each has room, stacked
+   in narrow columns. State hooks: .hh-option[data-choice="approve|reject"][data-checked="true"]. */
+.hh-approve-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--hh-control-size-lg) * 3.5)), 1fr));
+  gap: var(--hh-space-2);
+}
+
+.hh-approve-pair > .hh-option,
+.hh-approve-pair > .hh-option + .hh-option {
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  font-family: var(--hh-type-label-family);
+  font-size: var(--hh-type-body-lg-size);
+  font-weight: var(--hh-type-label-weight);
+}
+
+.hh-approve-pair > .hh-option[data-checked='true'] {
+  border: var(--hh-border-width-thick) solid var(--hh-strip-foreground);
+}
+
+.hh-approve-pair > .hh-option[data-choice='reject'][data-checked='true'] {
+  border-color: var(--hh-destructive);
+}
+
+.hh-answer-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hh-space-1);
+  white-space: nowrap;
+  font-family: var(--hh-type-label-family);
+  font-size: var(--hh-type-label-size);
+  font-weight: var(--hh-type-label-weight);
+}
+
+/* ---------- Attachments: opaque code planes ---------- */
+
+.hh-attachment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-md);
+  background: var(--hh-surface-card);
+  color: var(--hh-surface-card-foreground);
+}
+
+.hh-attachment-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hh-space-2);
+  padding: var(--hh-space-2) var(--hh-space-3);
+  border-bottom: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+.hh-attachment-title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hh-attachment-body {
+  /* Containing block for visually hidden diff labels, so the scroll box clips them instead of the page. */
+  position: relative;
+  max-height: var(--hh-code-max-height);
+  margin: 0;
+  overflow: auto;
+  background: var(--hh-code);
+  color: var(--hh-code-foreground);
+  font-family: var(--hh-type-mono-family);
+  font-size: var(--hh-type-mono-size);
+  line-height: var(--hh-type-mono-line-height);
+}
+
+pre.hh-attachment-body {
+  padding: var(--hh-space-3);
+  white-space: pre;
+}
+
+.hh-attachment-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hh-space-2);
+  padding: var(--hh-space-2) var(--hh-space-3);
+}
+
+.hh-diff {
+  display: block;
+  margin: 0;
+  padding: var(--hh-space-2) 0;
+  list-style: none;
+}
+
+.hh-diff-line {
+  display: grid;
+  grid-template-columns: var(--hh-kbd-size) minmax(0, 1fr);
+  padding-inline-end: var(--hh-space-3);
+  color: var(--hh-code-foreground);
+  white-space: pre;
+}
+
+.hh-diff-line[data-kind='add'] {
+  background: var(--hh-diff-add);
+}
+
+.hh-diff-line[data-kind='remove'] {
+  background: var(--hh-diff-remove);
+}
+
+.hh-diff-sign {
+  text-align: center;
+  font-weight: var(--hh-font-weight-bold);
+}
+
+/* ---------- Answer bar: submit the whole Round ---------- */
+
+.hh-answer-bar {
+  position: relative;
+  z-index: var(--hh-layer-raised);
+  flex: none;
+  display: grid;
+  gap: var(--hh-space-3);
+  padding: var(--hh-density-inset);
+  border-radius: 0 0 var(--hh-radius-md) var(--hh-radius-md);
+  background: var(--hh-surface-tray);
+  color: var(--hh-surface-tray-foreground);
+}
+
+.hh-answer-bar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hh-space-2) var(--hh-space-4);
+}
+
+/* Completion and, for a Round with several approve/reject Questions, the poll tally: one line of secondary metadata. */
+.hh-answer-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--hh-space-1) var(--hh-space-3);
+  min-width: 0;
+}
+
+.hh-answer-tally {
+  color: var(--hh-muted-foreground);
+}
+
+/* Optional notes fold away until wanted ("Add notes", or N). */
+.hh-notes {
+  padding: 0 var(--hh-density-inset) var(--hh-density-inset);
+}
+
+.hh-notes-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hh-space-2);
+  min-height: var(--hh-button-min-target);
+  font-family: var(--hh-type-label-family);
+  font-size: var(--hh-type-label-size);
+  font-weight: var(--hh-type-label-weight);
+  cursor: pointer;
+}
+
+.hh-notes[open] .hh-textarea {
+  margin-top: var(--hh-space-2);
+}
+
+/* Glance (phone): no key hints anywhere; choice rows drop the hint column. */
+[data-density='glance'] :is(.hh-kbd-hints, .hh-answer-bar .hh-kbd, .hh-notes-summary .hh-kbd) {
+  display: none;
+}
+
+[data-density='glance'] .hh-option {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+[data-density='glance'] .hh-option > :first-child {
+  display: none;
+}
+
+[data-density='glance'] .hh-answer-bar .hh-button[type='submit'] {
+  flex: 1 1 100%;
+  min-height: var(--hh-control-size-lg);
+}
+
+/* Headings that receive focus only by script (opening a Round, the empty bay) show where reading starts, not a control. */
+:is(.hh-round-head, .hh-strip-bay-head) [tabindex='-1']:focus {
+  outline: none;
+}
+
+/* ---------- Keyboard hints ---------- */
+
+.hh-kbd-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hh-space-2) var(--hh-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--hh-type-body-sm-size);
+  line-height: var(--hh-type-body-sm-line-height);
+}
+
+.hh-kbd-hints li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hh-space-1);
+}
+
+/* ---------- Connection status: the only place the live glow appears ---------- */
+
+.hh-connection {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hh-space-2);
+  min-height: var(--hh-control-size-sm);
+  padding: 0 var(--hh-space-3);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-sm);
+  font-family: var(--hh-type-label-family);
+  font-size: var(--hh-type-label-size);
+  font-weight: var(--hh-type-label-weight);
+  white-space: nowrap;
+}
+
+.hh-connection-lamp {
+  width: calc(var(--hh-icon-size) * 0.6);
+  height: calc(var(--hh-icon-size) * 0.6);
+  flex: none;
+  box-sizing: border-box;
+  border: var(--hh-border-width-thick) solid var(--hh-expired);
+  border-radius: var(--hh-radius-pill);
+  background: transparent;
+}
+
+.hh-connection[data-state='live'] .hh-connection-lamp {
+  border-color: var(--hh-live);
+  background: var(--hh-live);
+  box-shadow: var(--hh-elevation-live);
+}
+
+.hh-connection[data-state='reconnecting'] .hh-connection-lamp {
+  border-color: var(--hh-warning);
+  background: var(--hh-warning);
+  animation: hh-fade var(--hh-motion-pulse) var(--hh-easing-standard) 4 alternate;
+}
+
+.hh-connection-detail {
+  font-family: var(--hh-type-mono-sm-family);
+  font-size: var(--hh-type-mono-sm-size);
+  font-weight: var(--hh-font-weight-regular);
+  font-variant-numeric: tabular-nums;
+  color: var(--hh-muted-foreground);
+}
+
+/* A value streaming now (count of pending Rounds while SSE is live). */
+.hh-live-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hh-space-1);
+  padding: 0 var(--hh-space-2);
+  border-radius: var(--hh-radius-sm);
+  font-family: var(--hh-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.hh-live-value[data-live='true'] {
+  background: var(--hh-live);
+  color: var(--hh-live-foreground);
+  box-shadow: var(--hh-elevation-live);
+}
+
+/* ---------- Agent roster ---------- */
+
+.hh-agent-roster {
+  display: grid;
+  gap: var(--hh-density-gap);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--hh-overlay-popover-width)), 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hh-agent-card {
+  display: grid;
+  gap: var(--hh-space-3);
+  align-content: start;
+  min-width: 0;
+  padding: var(--hh-density-inset);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-md);
+  background: var(--hh-surface-card);
+  color: var(--hh-surface-card-foreground);
+}
+
+.hh-agent-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hh-space-2);
+}
+
+.hh-agent-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hh-space-1);
+  font-size: var(--hh-type-body-sm-size);
+}
+
+/* ---------- Answered log ---------- */
+
+.hh-answered-log {
+  min-width: 0;
+}
+
+.hh-answered-log .hh-table td:last-child {
+  min-width: var(--hh-overlay-tooltip-width);
+}
+
+/* ---------- Motion recipes (durations collapse to 1ms under reduced motion) ---------- */
+
+@keyframes hh-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--hh-enter-offset));
+  }
+}
+
+@keyframes hh-pop {
+  from {
+    opacity: 0;
+    transform: scale(var(--hh-enter-scale));
+  }
+}
+
+@keyframes hh-slide {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes hh-depart {
+  to {
+    opacity: 0;
+    transform: translateX(var(--hh-enter-offset));
+  }
+}
+
+@keyframes hh-fade {
+  to {
+    opacity: var(--hh-opacity-disabled);
+  }
+}
+
+@keyframes hh-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hh-spinner,
+  .hh-skeleton,
+  .hh-connection-lamp {
+    animation: none;
+  }
+}
+
+@media (max-width: 48rem) {
+  .hh-sheet {
+    margin: auto 0 0;
+    width: 100vw;
+    height: auto;
+    max-height: 85dvh;
+    border-radius: var(--hh-radius-lg) var(--hh-radius-lg) 0 0;
+  }
+
+  .hh-sheet[open] {
+    animation: hh-enter var(--hh-motion-panel) var(--hh-easing-drawer);
+  }
+}
+
+@media (min-width: 64rem) {
+  .hh-question {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
