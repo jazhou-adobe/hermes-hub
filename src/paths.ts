@@ -11,4 +11,7 @@ export function hermesHome(): string {
 
 export const dbPath = () => join(hermesHome(), "hub.db");
 export const hubJsonPath = () => join(hermesHome(), "hub.json");
+export const hubLockPath = () => join(hermesHome(), "hub.lock");
 export const configPath = () => join(hermesHome(), "config.toml");
+export const logPath = () => join(hermesHome(), "logs", "hub.log");
+export const backupsDir = () => join(hermesHome(), "backups");

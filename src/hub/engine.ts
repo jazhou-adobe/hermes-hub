@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
+import { DEFAULT_CONFIG, type HubConfig } from "../config.ts";
 import { HubError } from "../errors.ts";
-import { canonicalJson, effectivePolicy, hubChecks, LIMITS, oversizedAttachment } from "../schema/checks.ts";
+import { canonicalJson, effectivePolicy, hubChecks, oversizedAttachment } from "../schema/checks.ts";
 import type { Answer, Outcome, PendingStatus, QuestionValue, Round } from "../schema/types.ts";
 import {
   isDismissInput,
@@ -16,6 +17,7 @@ import {
 import { VERSION } from "../version.ts";
 import { answerQuestions, lockValue, parseHumanValue, type Locks } from "./answers.ts";
 import { callsign } from "./callsign.ts";
+import { noopLogger, type Logger } from "./log.ts";
 
 export interface SessionRow {
   id: string;
@@ -68,6 +70,23 @@ export type HubEvent =
   | { type: "round.removed"; round_id: string }
   | { type: "draft.saved"; round_id: string; draft: Draft };
 
+/** Round content never reaches the log (logs spec): just ids, event names, callsigns, outcomes. */
+function logFieldsFor(e: HubEvent): Record<string, unknown> {
+  switch (e.type) {
+    case "round.created":
+    case "round.locked":
+      return { round_id: e.view.id, session_id: e.view.session.id, callsign: e.view.session.callsign };
+    case "round.ended":
+      return { round_id: e.round_id, outcome: e.answer.outcome };
+    case "round.superseded":
+      return { round_id: e.view.id, replaces: e.replaces };
+    case "round.removed":
+      return { round_id: e.round_id };
+    case "draft.saved":
+      return { round_id: e.round_id };
+  }
+}
+
 export interface Clock {
   now(): number;
 }
@@ -102,7 +121,18 @@ export class Engine {
     private readonly db: Database,
     private readonly baseUrl: string,
     private readonly clock: Clock = systemClock,
+    private config: HubConfig = DEFAULT_CONFIG,
+    private readonly logger: Logger = noopLogger,
   ) {}
+
+  /** Applies a hot-reloaded `config.toml` (the caller, `src/hub/run.ts`, keeps the bound port). */
+  setConfig(config: HubConfig): void {
+    this.config = config;
+  }
+
+  private get limits() {
+    return this.config.limits;
+  }
 
   private now(): string {
     return new Date(this.clock.now()).toISOString();
@@ -114,7 +144,10 @@ export class Engine {
   }
 
   private emit(events: HubEvent[]): void {
-    for (const event of events) for (const listener of this.listeners) listener(event);
+    for (const event of events) {
+      this.logger.log("info", event.type, logFieldsFor(event));
+      for (const listener of this.listeners) listener(event);
+    }
   }
 
   /** Fires overdue policies (after a restart, in deadline order), then keeps a timer on the next deadline. */
@@ -129,7 +162,7 @@ export class Engine {
 
   hubInfo() {
     const row = this.db.query<{ value: string }, []>("SELECT value FROM meta WHERE key = 'hub_id'").get();
-    return { hub_id: row!.value, version: VERSION, schemas: SUPPORTED_SCHEMAS, limits: LIMITS };
+    return { hub_id: row!.value, version: VERSION, schemas: SUPPORTED_SCHEMAS, limits: this.limits };
   }
 
   // ── Sessions ────────────────────────────────────────────────────────────
@@ -193,8 +226,8 @@ export class Engine {
     doc: unknown,
     bodyBytes: number,
   ): { round_id: string; url: string; status: "pending" | Outcome; replay: boolean } {
-    if (bodyBytes > LIMITS.round_bytes) {
-      throw new HubError("too_large", `the Round is over ${LIMITS.round_bytes} bytes`, { limit: LIMITS.round_bytes, pointer: "" });
+    if (bodyBytes > this.limits.round_bytes) {
+      throw new HubError("too_large", `the Round is over ${this.limits.round_bytes} bytes`, { limit: this.limits.round_bytes, pointer: "" });
     }
     const schema = doc && typeof doc === "object" && "schema" in doc ? doc.schema : undefined;
     if (typeof schema === "string" && /^hermes\.round\/v\d+$/.test(schema) && !SUPPORTED_SCHEMAS.includes(schema)) {
@@ -205,10 +238,10 @@ export class Engine {
     const round = doc as Round; // validated against the schema above
     const errors = hubChecks(round);
     if (errors.length) throw new HubError("invalid_round", "the Round failed the Hub's checks", { errors });
-    const oversized = oversizedAttachment(round);
+    const oversized = oversizedAttachment(round, this.limits);
     if (oversized !== undefined) {
-      throw new HubError("too_large", `attachment ${oversized} is over ${LIMITS.attachment_bytes} bytes`, {
-        limit: LIMITS.attachment_bytes,
+      throw new HubError("too_large", `attachment ${oversized} is over ${this.limits.attachment_bytes} bytes`, {
+        limit: this.limits.attachment_bytes,
         pointer: oversized,
       });
     }
@@ -251,9 +284,9 @@ export class Engine {
            FROM rounds WHERE session_id = ?1 AND status = 'pending'`,
         )
         .get(session.id)!;
-      if (pending.n >= LIMITS.pending_per_session) {
+      if (pending.n >= this.limits.pending_per_session) {
         throw new HubError("flood_cap", `this session already has ${pending.n} pending Rounds`, {
-          limit: LIMITS.pending_per_session,
+          limit: this.limits.pending_per_session,
           oldest_round_id: pending.oldest,
         });
       }

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { HTTP_STATUS, HubError } from "../errors.ts";
 import { CLONE_ROOT } from "../paths.ts";
 import type { Engine, HubEvent } from "./engine.ts";
+import { noopLogger, type Logger } from "./log.ts";
 import devCommandCenter from "../../web/index.html";
 
 const HEARTBEAT_MS = 15_000;
@@ -41,22 +42,6 @@ function guard(req: Request, port: number): void {
 }
 
 type Handler<P extends string> = (req: Bun.BunRequest<P>, server: Server<undefined>) => Response | Promise<Response>;
-
-/** Runs the guard, maps HubErrors to RFC 9457 problems (anything else is a 500), and adds nosniff. */
-function handle<P extends string>(fn: Handler<P>): Handler<P> {
-  return async (req, server) => {
-    let res: Response;
-    try {
-      guard(req, server.port!);
-      res = await fn(req, server);
-    } catch (err) {
-      if (!(err instanceof HubError)) console.error(err);
-      res = problem(err instanceof HubError ? err : new HubError("internal", "internal error"));
-    }
-    res.headers.set("X-Content-Type-Options", "nosniff");
-    return res;
-  };
-}
 
 async function jsonBody(req: Request, code: string): Promise<unknown> {
   try {
@@ -111,9 +96,31 @@ async function buildCommandCenter(): Promise<{ index: BuildArtifact; assets: Map
   return { index, assets };
 }
 
-export async function startServer(engine: Engine, port: number): Promise<Server<undefined>> {
+export async function startServer(engine: Engine, port: number, logger: Logger = noopLogger): Promise<Server<undefined>> {
   const session = (req: Request) => engine.sessionFor(req.headers.get("Hermes-Session"));
   const development = process.env.NODE_ENV === "development";
+
+  /** Runs the guard, maps HubErrors to RFC 9457 problems (anything else is a 500), logs, and adds nosniff. */
+  function handle<P extends string>(fn: Handler<P>): Handler<P> {
+    return async (req, server) => {
+      const path = new URL(req.url).pathname;
+      const started = performance.now();
+      let res: Response;
+      try {
+        guard(req, server.port!);
+        res = await fn(req, server);
+      } catch (err) {
+        const hubErr = err instanceof HubError ? err : new HubError("internal", "internal error");
+        if (!(err instanceof HubError)) {
+          logger.log("error", "http.error", { method: req.method, path, error: err instanceof Error ? err.message : String(err) });
+        }
+        res = problem(hubErr);
+      }
+      logger.log("info", "http.request", { method: req.method, path, status: res.status, duration_ms: Math.round(performance.now() - started) });
+      res.headers.set("X-Content-Type-Options", "nosniff");
+      return res;
+    };
+  }
 
   let ui: Record<string, unknown>;
   if (development) {
