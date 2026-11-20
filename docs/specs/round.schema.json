@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hermes-hub.local/schema/hermes.round.v1.json",
+  "title": "Hermes Hub Round and Answer, v1",
+  "description": "Confirmed 2026-11-20. A Round is what an Agent submits; an Answer is what it gets back. Identical over HTTP and MCP. Lifecycle behaviour (timeouts firing, partial expiry) is specified by the lifecycle spec, not here.",
+  "oneOf": [{ "$ref": "#/$defs/Round" }, { "$ref": "#/$defs/Answer" }],
+  "$defs": {
+    "Id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$" },
+    "PlainText": { "type": "string", "minLength": 1 },
+    "Markdown": { "type": "string", "description": "CommonMark; raw HTML is stripped, never rendered." },
+
+    "Round": {
+      "type": "object",
+      "required": ["schema", "title", "questions"],
+      "additionalProperties": true,
+      "properties": {
+        "schema": { "const": "hermes.round/v1" },
+        "title": { "$ref": "#/$defs/PlainText", "maxLength": 120 },
+        "context": { "$ref": "#/$defs/Markdown", "maxLength": 16384 },
+        "idempotency_key": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "supersedes": { "type": "string", "description": "Id of a pending Round from the same Agent session that this Round replaces (lifecycle spec)." },
+        "links": { "type": "array", "maxItems": 10, "items": { "$ref": "#/$defs/Link" } },
+        "policy": { "$ref": "#/$defs/Policy", "description": "Default for every Question; absent means wait." },
+        "attachments": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/Attachment" } },
+        "questions": { "type": "array", "minItems": 1, "maxItems": 20, "items": { "$ref": "#/$defs/Question" } }
+      }
+    },
+
+    "Link": {
+      "type": "object",
+      "required": ["url"],
+      "properties": {
+        "url": { "type": "string", "format": "uri", "pattern": "^https?://" },
+        "label": { "type": "string", "maxLength": 80 }
+      }
+    },
+
+    "Policy": {
+      "oneOf": [
+        { "type": "object", "required": ["on_timeout"], "properties": { "on_timeout": { "const": "wait" } }, "additionalProperties": false },
+        {
+          "type": "object",
+          "required": ["on_timeout", "after_seconds"],
+          "properties": {
+            "on_timeout": { "enum": ["apply_recommended", "cancel"] },
+            "after_seconds": { "type": "integer", "minimum": 10 }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "QuestionBase": {
+      "type": "object",
+      "required": ["id", "kind", "prompt"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "prompt": { "$ref": "#/$defs/PlainText", "maxLength": 500 },
+        "detail": { "$ref": "#/$defs/Markdown", "maxLength": 8192 },
+        "required": { "type": "boolean", "default": true },
+        "policy": { "$ref": "#/$defs/Policy", "description": "Overrides the Round policy for this Question." },
+        "attachments": { "type": "array", "maxItems": 10, "items": { "$ref": "#/$defs/Attachment" } }
+      }
+    },
+
+    "Option": {
+      "type": "object",
+      "required": ["id", "label"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "label": { "$ref": "#/$defs/PlainText", "maxLength": 120 },
+        "detail": { "$ref": "#/$defs/Markdown", "maxLength": 2048 }
+      }
+    },
+
+    "Question": {
+      "oneOf": [
+        {
+          "allOf": [{ "$ref": "#/$defs/QuestionBase" }],
+          "properties": {
+            "kind": { "const": "single" },
+            "options": { "type": "array", "minItems": 2, "maxItems": 50, "items": { "$ref": "#/$defs/Option" } },
+            "recommended": { "$ref": "#/$defs/Id" },
+            "allow_other": { "type": "boolean", "default": false }
+          },
+          "required": ["options"]
+        },
+        {
+          "allOf": [{ "$ref": "#/$defs/QuestionBase" }],
+          "properties": {
+            "kind": { "const": "multi" },
+            "options": { "type": "array", "minItems": 2, "maxItems": 50, "items": { "$ref": "#/$defs/Option" } },
+            "recommended": { "type": "array", "items": { "$ref": "#/$defs/Id" }, "uniqueItems": true },
+            "allow_other": { "type": "boolean", "default": false },
+            "min_selected": { "type": "integer", "minimum": 0 },
+            "max_selected": { "type": "integer", "minimum": 1 }
+          },
+          "required": ["options"]
+        },
+        {
+          "allOf": [{ "$ref": "#/$defs/QuestionBase" }],
+          "properties": {
+            "kind": { "const": "text" },
+            "placeholder": { "type": "string", "maxLength": 200 },
+            "recommended": { "type": "string", "maxLength": 10000, "description": "Suggested text; shown, never prefilled." },
+            "multiline": { "type": "boolean", "default": true },
+            "max_length": { "type": "integer", "minimum": 1, "maximum": 10000, "default": 10000 }
+          }
+        },
+        {
+          "allOf": [{ "$ref": "#/$defs/QuestionBase" }],
+          "properties": {
+            "kind": { "const": "approve" },
+            "proposal": { "$ref": "#/$defs/Proposal" },
+            "approve_label": { "type": "string", "maxLength": 60 },
+            "reject_label": { "type": "string", "maxLength": 60 },
+            "recommended": { "enum": ["approve", "reject"] }
+          }
+        }
+      ]
+    },
+
+    "Proposal": {
+      "type": "object",
+      "required": ["format", "value"],
+      "properties": {
+        "format": { "enum": ["text", "command", "json"] },
+        "value": { "description": "string for text/command; any JSON for json" },
+        "editable": { "type": "boolean", "default": false },
+        "json_schema": { "type": "object", "description": "Only for format json: edits must validate against it." }
+      }
+    },
+
+    "Attachment": {
+      "description": "Inline only. Caps: 256 KiB per attachment (after base64 for images), 4 MiB per Round in total.",
+      "oneOf": [
+        { "type": "object", "required": ["kind", "content"], "properties": { "kind": { "const": "markdown" }, "title": { "type": "string" }, "content": { "$ref": "#/$defs/Markdown" } } },
+        { "type": "object", "required": ["kind", "content"], "properties": { "kind": { "const": "diff" }, "title": { "type": "string" }, "path": { "type": "string" }, "content": { "type": "string", "description": "Unified diff" } } },
+        { "type": "object", "required": ["kind", "content"], "properties": { "kind": { "const": "code" }, "title": { "type": "string" }, "path": { "type": "string" }, "language": { "type": "string" }, "start_line": { "type": "integer", "minimum": 1 }, "content": { "type": "string" } } },
+        { "type": "object", "required": ["kind", "media_type", "data", "alt"], "properties": { "kind": { "const": "image" }, "title": { "type": "string" }, "media_type": { "enum": ["image/png", "image/jpeg", "image/webp", "image/gif"] }, "data": { "type": "string", "contentEncoding": "base64" }, "alt": { "type": "string", "minLength": 1 } } },
+        { "type": "object", "required": ["kind", "path", "content"], "properties": { "kind": { "const": "file" }, "title": { "type": "string" }, "path": { "type": "string", "description": "Display label only; the Hub never reads it." }, "content": { "type": "string" } } },
+        { "type": "object", "required": ["kind", "url"], "properties": { "kind": { "const": "link" }, "title": { "type": "string" }, "url": { "type": "string", "format": "uri", "pattern": "^https?://" }, "description": { "type": "string", "maxLength": 500 } } }
+      ]
+    },
+
+    "Answer": {
+      "type": "object",
+      "required": ["schema", "round_id", "outcome", "questions", "decided_at"],
+      "properties": {
+        "schema": { "const": "hermes.answer/v1" },
+        "round_id": { "type": "string" },
+        "outcome": { "enum": ["answered", "dismissed", "redirected", "expired", "cancelled"] },
+        "message": { "type": "string", "description": "Required when outcome is redirected: what to do instead." },
+        "note": { "type": "string", "description": "Round note from the Human." },
+        "questions": { "type": "object", "additionalProperties": { "$ref": "#/$defs/QuestionAnswer" } },
+        "decided_at": { "type": "string", "format": "date-time" },
+        "cancelled_by": { "enum": ["agent", "human"], "description": "Only when outcome is cancelled." },
+        "superseded_by": { "type": "string", "description": "Only when cancelled because a newer Round superseded it." }
+      },
+      "allOf": [
+        { "if": { "properties": { "outcome": { "const": "redirected" } } }, "then": { "required": ["message"] } },
+        { "if": { "properties": { "outcome": { "const": "cancelled" } } }, "then": { "required": ["cancelled_by"] }, "else": { "not": { "anyOf": [{ "required": ["cancelled_by"] }, { "required": ["superseded_by"] }] } } }
+      ]
+    },
+
+    "QuestionAnswer": {
+      "type": "object",
+      "required": ["value", "set_by"],
+      "properties": {
+        "value": {
+          "oneOf": [
+            { "type": "null", "description": "Not answered (optional Question, or Round dismissed/redirected/cancelled)." },
+            { "type": "object", "required": ["selected"], "properties": { "selected": { "$ref": "#/$defs/Id" } }, "additionalProperties": false, "description": "single" },
+            { "type": "object", "required": ["other"], "properties": { "other": { "type": "string" } }, "additionalProperties": false, "description": "single, Other" },
+            { "type": "object", "required": ["selected"], "properties": { "selected": { "type": "array", "items": { "$ref": "#/$defs/Id" } }, "other": { "type": "string" } }, "additionalProperties": false, "description": "multi" },
+            { "type": "object", "required": ["text"], "properties": { "text": { "type": "string" } }, "additionalProperties": false, "description": "text" },
+            { "type": "object", "required": ["decision", "edited"], "properties": { "decision": { "enum": ["approve", "reject"] }, "edited": { "type": "boolean" }, "proposal": { "description": "Present when edited: the Human's version of the proposal value." } }, "additionalProperties": false, "description": "approve" }
+          ]
+        },
+        "note": { "type": "string" },
+        "set_by": { "enum": ["human", "policy", "none"] },
+        "suggested_by": { "type": "string", "description": "Advisor name; only when the Human sent that Advisor's suggested value unchanged (delegation spec). set_by stays human." }
+      }
+    }
+  }
+}

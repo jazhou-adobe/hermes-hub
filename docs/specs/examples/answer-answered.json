@@ -1,0 +1,12 @@
+{
+  "schema": "hermes.answer/v1",
+  "round_id": "r_01jd3k8w2m",
+  "outcome": "answered",
+  "note": "Keep the old schema for a week.",
+  "questions": {
+    "strategy": { "value": { "selected": "blue_green" }, "set_by": "human" },
+    "run_migration": { "value": { "decision": "approve", "edited": true, "proposal": "bun run migrate --env staging --dry-run" }, "note": "Dry run first.", "set_by": "human" },
+    "notes_for_reviewer": { "value": null, "set_by": "none" }
+  },
+  "decided_at": "2026-11-20T14:06:00Z"
+}

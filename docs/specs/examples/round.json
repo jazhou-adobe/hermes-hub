@@ -1,0 +1,40 @@
+{
+  "schema": "hermes.round/v1",
+  "title": "Choose a migration strategy",
+  "context": "Moving `orders` to the new **billing** schema. Both paths keep the API up.",
+  "idempotency_key": "api-refactor-2026-11-20-001",
+  "links": [{ "label": "PR #412", "url": "https://github.com/example/api/pull/412" }],
+  "policy": { "on_timeout": "apply_recommended", "after_seconds": 600 },
+  "attachments": [
+    { "kind": "diff", "title": "Route change", "path": "src/routes/orders.ts",
+      "content": "--- a/src/routes/orders.ts\n+++ b/src/routes/orders.ts\n@@ -1,2 +1,2 @@\n-import { db } from './db';\n+import { billingDb as db } from './billing-db';\n" }
+  ],
+  "questions": [
+    {
+      "id": "strategy",
+      "kind": "single",
+      "prompt": "Which migration strategy?",
+      "options": [
+        { "id": "blue_green", "label": "Blue/green", "detail": "Two schemas live; switch at the router." },
+        { "id": "in_place", "label": "In place", "detail": "One `ALTER` per table; short lock." }
+      ],
+      "recommended": "blue_green"
+    },
+    {
+      "id": "run_migration",
+      "kind": "approve",
+      "prompt": "Run the migration on staging now?",
+      "policy": { "on_timeout": "cancel", "after_seconds": 300 },
+      "proposal": { "format": "command", "value": "bun run migrate --env staging", "editable": true },
+      "approve_label": "Run on staging",
+      "recommended": "approve"
+    },
+    {
+      "id": "notes_for_reviewer",
+      "kind": "text",
+      "prompt": "Anything the reviewer should check?",
+      "required": false,
+      "placeholder": "Optional"
+    }
+  ]
+}
