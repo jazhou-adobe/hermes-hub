@@ -1,0 +1,120 @@
+/*
+ * Tailwind v4 bridge for Hermes tokens. Import after tailwindcss and tokens/themes.css.
+ * Default palettes, radii, shadows, type sizes, and breakpoints are reset so only semantic Hermes utilities exist
+ * (bg-strip, text-strip-foreground, border-pending, bg-surface-panel, text-muted-foreground, rounded-md, shadow-raised,
+ * text-body, font-mono, lg:grid-cols-2, gap-4 on the --hh-space-1 rail). Tailwind v3 apps map the same --hh-* variables
+ * in tailwind.config theme.extend.
+ */
+@theme {
+  --color-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
+  --text-*: initial;
+  --breakpoint-*: initial;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+}
+
+@theme inline {
+  --spacing: var(--hh-space-1);
+  --font-sans: var(--hh-font-sans);
+  --font-mono: var(--hh-font-mono);
+  --font-condensed: var(--hh-font-condensed);
+  --color-background: var(--hh-background);
+  --color-foreground: var(--hh-foreground);
+  --color-surface-card: var(--hh-surface-card);
+  --color-surface-card-foreground: var(--hh-surface-card-foreground);
+  --color-surface-panel: var(--hh-surface-panel);
+  --color-surface-panel-foreground: var(--hh-surface-panel-foreground);
+  --color-surface-shelf: var(--hh-surface-shelf);
+  --color-surface-shelf-foreground: var(--hh-surface-shelf-foreground);
+  --color-surface-tray: var(--hh-surface-tray);
+  --color-surface-tray-foreground: var(--hh-surface-tray-foreground);
+  --color-primary: var(--hh-primary);
+  --color-primary-foreground: var(--hh-primary-foreground);
+  --color-secondary: var(--hh-secondary);
+  --color-secondary-foreground: var(--hh-secondary-foreground);
+  --color-muted: var(--hh-muted);
+  --color-muted-foreground: var(--hh-muted-foreground);
+  --color-accent: var(--hh-accent);
+  --color-accent-foreground: var(--hh-accent-foreground);
+  --color-destructive: var(--hh-destructive);
+  --color-destructive-foreground: var(--hh-destructive-foreground);
+  --color-border: var(--hh-border);
+  --color-input: var(--hh-input);
+  --color-ring: var(--hh-ring);
+  --color-success: var(--hh-success);
+  --color-success-foreground: var(--hh-success-foreground);
+  --color-warning: var(--hh-warning);
+  --color-warning-foreground: var(--hh-warning-foreground);
+  --color-info: var(--hh-info);
+  --color-info-foreground: var(--hh-info-foreground);
+  --color-strip: var(--hh-strip);
+  --color-strip-foreground: var(--hh-strip-foreground);
+  --color-pending: var(--hh-pending);
+  --color-pending-foreground: var(--hh-pending-foreground);
+  --color-answered: var(--hh-answered);
+  --color-answered-foreground: var(--hh-answered-foreground);
+  --color-expired: var(--hh-expired);
+  --color-expired-foreground: var(--hh-expired-foreground);
+  --color-recommended: var(--hh-recommended);
+  --color-recommended-foreground: var(--hh-recommended-foreground);
+  --color-live: var(--hh-live);
+  --color-live-foreground: var(--hh-live-foreground);
+  --color-code: var(--hh-code);
+  --color-code-foreground: var(--hh-code-foreground);
+  --color-diff-add: var(--hh-diff-add);
+  --color-diff-remove: var(--hh-diff-remove);
+  --color-agent-1: var(--hh-agent-1);
+  --color-agent-2: var(--hh-agent-2);
+  --color-agent-3: var(--hh-agent-3);
+  --color-agent-4: var(--hh-agent-4);
+  --color-agent-5: var(--hh-agent-5);
+  --color-agent-6: var(--hh-agent-6);
+  --color-shadow: var(--hh-shadow);
+  --color-scrim: var(--hh-scrim);
+  --color-chart-1: var(--hh-chart-1);
+  --color-chart-2: var(--hh-chart-2);
+  --color-chart-3: var(--hh-chart-3);
+  --color-chart-4: var(--hh-chart-4);
+  --color-chart-5: var(--hh-chart-5);
+  --radius-sm: var(--hh-radius-sm);
+  --radius-md: var(--hh-radius-md);
+  --radius-lg: var(--hh-radius-lg);
+  --radius-pill: var(--hh-radius-pill);
+  --shadow-raised: var(--hh-elevation-raised);
+  --shadow-overlay: var(--hh-elevation-overlay);
+  --shadow-live: var(--hh-elevation-live);
+  --text-display: var(--hh-type-display-size);
+  --text-display--line-height: var(--hh-type-display-line-height);
+  --text-display--font-weight: var(--hh-type-display-weight);
+  --text-heading-lg: var(--hh-type-heading-lg-size);
+  --text-heading-lg--line-height: var(--hh-type-heading-lg-line-height);
+  --text-heading-lg--font-weight: var(--hh-type-heading-lg-weight);
+  --text-heading-md: var(--hh-type-heading-md-size);
+  --text-heading-md--line-height: var(--hh-type-heading-md-line-height);
+  --text-heading-md--font-weight: var(--hh-type-heading-md-weight);
+  --text-body-lg: var(--hh-type-body-lg-size);
+  --text-body-lg--line-height: var(--hh-type-body-lg-line-height);
+  --text-body-lg--font-weight: var(--hh-type-body-lg-weight);
+  --text-body: var(--hh-type-body-size);
+  --text-body--line-height: var(--hh-type-body-line-height);
+  --text-body--font-weight: var(--hh-type-body-weight);
+  --text-body-sm: var(--hh-type-body-sm-size);
+  --text-body-sm--line-height: var(--hh-type-body-sm-line-height);
+  --text-body-sm--font-weight: var(--hh-type-body-sm-weight);
+  --text-label: var(--hh-type-label-size);
+  --text-label--line-height: var(--hh-type-label-line-height);
+  --text-label--font-weight: var(--hh-type-label-weight);
+  --text-mono: var(--hh-type-mono-size);
+  --text-mono--line-height: var(--hh-type-mono-line-height);
+  --text-mono--font-weight: var(--hh-type-mono-weight);
+  --text-mono-sm: var(--hh-type-mono-sm-size);
+  --text-mono-sm--line-height: var(--hh-type-mono-sm-line-height);
+  --text-mono-sm--font-weight: var(--hh-type-mono-sm-weight);
+  --text-strip-header: var(--hh-type-strip-header-size);
+  --text-strip-header--line-height: var(--hh-type-strip-header-line-height);
+  --text-strip-header--font-weight: var(--hh-type-strip-header-weight);
+}
