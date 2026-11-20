@@ -2,12 +2,12 @@ import type { BuildArtifact, Server } from "bun";
 import { join } from "node:path";
 import { HTTP_STATUS, HubError } from "../errors.ts";
 import { CLONE_ROOT } from "../paths.ts";
-import type { Outcome } from "../schema/types.ts";
+import type { Answer, Outcome } from "../schema/types.ts";
 import type { Engine, HubEvent, LogFilter } from "./engine.ts";
 import { noopLogger, type Logger } from "./log.ts";
 import devCommandCenter from "../../web/index.html";
 
-const HEARTBEAT_MS = 15_000;
+export const HEARTBEAT_MS = 15_000;
 const CSP = "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'";
 const JSON_TYPE = /^application\/json\s*(;|$)/i;
 
@@ -56,14 +56,20 @@ function forbidAdvisor(req: Request): void {
   if (req.headers.has("Hermes-Advisor")) throw new HubError("advisor_cannot_ask", "an Advisor run cannot ask the Human");
 }
 
-/** A Server-Sent Events response fed by `start`, with a comment heartbeat. */
-function sse(req: Request, server: Server<undefined>, start: (send: (event: string, data: unknown) => void) => () => void) {
+/** A Server-Sent Events response fed by `start`, with a comment heartbeat every `heartbeatMs`. */
+export function sse(
+  req: Request,
+  server: Server<undefined>,
+  start: (send: (event: string, data: unknown, id?: string) => void) => () => void,
+  heartbeatMs = HEARTBEAT_MS,
+) {
   server.timeout(req, 0);
   let stop = () => {};
   const stream = new ReadableStream<string>({
     start(controller) {
-      const send = (event: string, data: unknown) => controller.enqueue(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-      const heartbeat = setInterval(() => controller.enqueue(": heartbeat\n\n"), HEARTBEAT_MS);
+      const send = (event: string, data: unknown, id?: string) =>
+        controller.enqueue(`${id === undefined ? "" : `id: ${id}\n`}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      const heartbeat = setInterval(() => controller.enqueue(": heartbeat\n\n"), heartbeatMs);
       const unsubscribe = start(send);
       stop = () => {
         clearInterval(heartbeat);
@@ -219,6 +225,29 @@ export async function startServer(engine: Engine, port: number, logger: Logger =
         GET: handle((req) => {
           const limit = Math.min(200, Math.max(1, Number(new URL(req.url).searchParams.get("limit")) || 50));
           return Response.json({ answers: engine.inbox(session(req), limit) });
+        }),
+      },
+      "/v1/events": {
+        GET: handle((req, server) => {
+          const s = session(req);
+          const header = req.headers.get("Last-Event-ID");
+          const parsed = header === null ? NaN : Number(header);
+          const cursor = Number.isFinite(parsed) ? parsed : null;
+          return sse(req, server, (send) => {
+            for (const { id, answer } of engine.eventsSince(s, cursor)) send("round.ended", answer, String(id));
+            return engine.subscribe((e: HubEvent) => {
+              if (e.type !== "round.ended") return;
+              let answer: Answer;
+              try {
+                const result = engine.get(s, e.round_id);
+                if (!("outcome" in result)) return; // defensive: it just ended, so this should never be pending
+                answer = result;
+              } catch {
+                return; // another session's Round
+              }
+              send("round.ended", answer, String(engine.eventCursor(e.round_id)));
+            });
+          });
         }),
       },
 
