@@ -13,6 +13,7 @@ export const HTTP_STATUS: Record<string, number> = {
   unknown_session: 401,
   forbidden: 403,
   advisor_cannot_ask: 403,
+  advisor_not_found: 404,
   invalid_answer: 422,
   internal: 500,
 };

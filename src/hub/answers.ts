@@ -90,7 +90,7 @@ export function parseHumanValue(q: Question, raw: unknown): QuestionValue | stri
 export function answerQuestions(
   round: Round,
   locks: Locks,
-  human: Record<string, { value: QuestionValue; note?: string }> = {},
+  human: Record<string, { value: QuestionValue; note?: string; suggested_by?: string }> = {},
 ): Record<string, QuestionAnswer> {
   return Object.fromEntries(
     round.questions.map((q): [string, QuestionAnswer] => {
@@ -98,7 +98,15 @@ export function answerQuestions(
       if (lock) return [q.id, { value: lock.value, set_by: "policy" }];
       const given = human[q.id];
       if (given && given.value !== null) {
-        return [q.id, { value: given.value, set_by: "human", ...(given.note ? { note: given.note } : {}) }];
+        return [
+          q.id,
+          {
+            value: given.value,
+            set_by: "human",
+            ...(given.note ? { note: given.note } : {}),
+            ...(given.suggested_by ? { suggested_by: given.suggested_by } : {}),
+          },
+        ];
       }
       return [q.id, { value: null, set_by: "none", ...(given?.note ? { note: given.note } : {}) }];
     }),

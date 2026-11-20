@@ -127,3 +127,44 @@ fieldset.locked {
   font-size: 0.85rem;
   font-style: italic;
 }
+
+/* Delegation (Advisors), S8 */
+.advisor {
+  margin-top: 0.75rem;
+  border-top: 1px dashed color-mix(in srgb, currentColor 25%, transparent);
+  padding-top: 0.5rem;
+}
+.advisor-ask {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.advisor-ask input[type="text"] {
+  flex: 1;
+  min-width: 10rem;
+}
+.advisor-status {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-style: italic;
+}
+.advisor-unparsed pre {
+  white-space: pre-wrap;
+  max-height: 10rem;
+  overflow-y: auto;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  padding: 0.5rem;
+}
+.suggested-note {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: color-mix(in srgb, teal 70%, currentColor);
+}
+.suggested-accept {
+  font-size: 0.85rem;
+}
+.suggested-accept button {
+  margin-left: 0.4rem;
+}

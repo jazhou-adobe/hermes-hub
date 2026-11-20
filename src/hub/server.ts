@@ -216,6 +216,23 @@ export async function startServer(engine: Engine, port: number): Promise<Server<
           return Response.json({ ok: true });
         }),
       },
+      "/cc/advisors": { GET: handle(() => Response.json({ advisors: engine.advisorNames() })) },
+      "/cc/rounds/:id/advisor": {
+        POST: handle<"/cc/rounds/:id/advisor">(async (req) => {
+          const body = (await jsonBody(req, "invalid_answer")) as { advisor?: unknown; brief?: unknown };
+          if (typeof body.advisor !== "string" || !body.advisor) {
+            throw new HubError("invalid_answer", "advisor is required");
+          }
+          const brief = typeof body.brief === "string" && body.brief.trim() ? body.brief : undefined;
+          return Response.json(engine.askAdvisor(req.params.id, body.advisor, brief, "manual"));
+        }),
+      },
+      "/cc/rounds/:id/advisor/cancel": {
+        POST: handle<"/cc/rounds/:id/advisor/cancel">((req) => {
+          engine.cancelAdvisor(req.params.id);
+          return Response.json({ ok: true });
+        }),
+      },
       "/cc/events": {
         GET: handle((req, server) =>
           sse(req, server, (send) => {

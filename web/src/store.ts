@@ -30,6 +30,11 @@ function upsert(view: FeedRoundView): FeedRoundView[] {
   return view.status === "pending" || view.answer === null ? [...rest, view] : rest;
 }
 
+/** Replaces a Round already in the Feed with a fresher view; a Round not present is left alone. */
+function replaceInPlace(view: FeedRoundView): FeedRoundView[] {
+  return state.rounds.map((r) => (r.id === view.id ? view : r));
+}
+
 /** Snapshot on every (re)connect, then patch in place from the Human-scoped SSE stream. */
 export function connect(): void {
   const events = new EventSource("/cc/events");
@@ -59,5 +64,13 @@ export function connect(): void {
     const event: Extract<HubEvent, { type: "draft.saved" }> = JSON.parse(e.data);
     set({ rounds: state.rounds.map((r) => (r.id === event.round_id ? { ...r, draft: event.draft } : r)) });
   });
+  // Delegation (Advisors): a started or ended run refreshes the Round in place, keeping an
+  // ended-in-place Round visible regardless of its Outcome (unlike `upsert`, used for pending-only views).
+  const onAdvisorView = (e: MessageEvent) => {
+    const event: Extract<HubEvent, { type: "advisor.started" | "advisor.ended" }> = JSON.parse(e.data);
+    set({ rounds: replaceInPlace(event.view) });
+  };
+  events.addEventListener("advisor.started", onAdvisorView);
+  events.addEventListener("advisor.ended", onAdvisorView);
   events.onerror = () => set({ connection: "lost" });
 }
