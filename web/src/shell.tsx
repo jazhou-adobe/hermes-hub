@@ -52,7 +52,7 @@ function Toasts() {
   const toasts = useStore((s) => s.toasts);
   if (toasts.length === 0) return null;
   return (
-    <section className="hh-toast-region pv-toasts" aria-label="Notifications">
+    <section className="hh-toast-region" data-placement="top" aria-label="Notifications">
       {toasts.map((t) => (
         <div key={t.id} className="hh-toast">
           <span className="hh-badge" data-tone={TOAST_BADGE[t.kind].tone}>
@@ -144,8 +144,8 @@ export function App() {
           </span>
         </span>
       </header>
-      <div className="pv-shell">
-        <nav className="hh-side-nav pv-nav" aria-label="Command Center">
+      <div className="hh-app-shell">
+        <nav className="hh-side-nav hh-app-shell-nav" aria-label="Command Center">
           <NavLink to="/" icon="bay" current={route.name === "feed"}>
             Feed
             <span className="hh-side-nav-count">
@@ -167,7 +167,7 @@ export function App() {
             Settings
           </NavLink>
         </nav>
-        <main id="main" className="pv-main" tabIndex={-1}>
+        <main id="main" className="hh-app-shell-main" tabIndex={-1}>
           {route.name === "feed" ? (
             <Feed />
           ) : route.name === "round" ? (
@@ -179,7 +179,7 @@ export function App() {
           ) : route.name === "settings" ? (
             <Settings />
           ) : (
-            <section className="pv-surface" aria-labelledby="nf-h">
+            <section className="hh-page" aria-labelledby="nf-h">
               <h1 className="hh-heading-lg" id="nf-h">
                 Not found
               </h1>

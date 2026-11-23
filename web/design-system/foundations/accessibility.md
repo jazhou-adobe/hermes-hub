@@ -81,6 +81,13 @@ Announcements follow SC 4.1.3 Status Messages: they are read without moving focu
 | Connection changes | Connection region | `polite` | "Reconnecting · retry in 4 s" / "Live" |
 | Submit fails | Answer bar | `role="alert"` | "Not sent · Hub unreachable · Answer kept · Retry" |
 | Submit succeeds | Bay status region | `polite` | "Answered · CLAUDE·api-refactor" |
+| A Round's next Lock is under 60 s (Lock soon) | Feed status region | `polite`, once | "CLAUDE·api-refactor · Lock soon · Q1 locks in 60 s, then applies recommended" |
+| A Question locks, the Round stays pending | Feed status region | `polite` | "CLAUDE·api-refactor · Q4 locked · policy applied recommended · Round stays pending" |
+| A Round ends in place (expired, superseded, cancelled) | Feed status region | `polite` | "r_5b2f90cd cancelled · replaced by r_7f3a91c0" |
+| Advisor run starts, finishes or is cancelled | Feed status region | `polite` | "Suggestion ready · codex-review · 2 Questions filled" |
+| Dismiss or Redirect succeeds | Feed status region | `polite` | "Dismissed · CLAUDE·api-refactor" / "Redirected · CLAUDE·api-refactor" |
+| Redirect sent without a message | The field's error | `role="alert"` | "Write what CLAUDE·api-refactor should do instead." |
+| Reconnected after a gap | Feed status region | `polite`, once | "Live · 2 new Rounds · 1 expired while offline" |
 
 - Live regions exist and are empty at first paint, so their first update is announced. They never hold placeholder copy ("No Answer sent yet") and take no room while empty.
 - The surface's one connection readout (`.hh-connection` in the app bar, or in the bay head where there is no app bar) is the polite connection region; static examples of the widget are not live regions.

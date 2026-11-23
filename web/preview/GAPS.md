@@ -1,5 +1,7 @@
 # Design gaps found while building the Feed preview
 
+> **Status:** every gap below was contributed to the master in apollo-tokens PR #1 and merged @ `0b316ce` (`briefs/command-center-additions-status.md` maps each one to its `.hh-*` class). The Hub re-copied that commit and dropped its `pv-*` glue; one gap remains open, listed under [Still open after 0b316ce](#still-open-after-0b316ce). This static preview keeps its `pv-` markup as built against `1d03cf9`.
+
 Contribution list for the design master (`jazhou-adobe/apollo-tokens`, `brands/hermes/design`, built against commit `1d03cf95ad82e400e88e346ff0cb8cb683ee58da`). Source brief: `briefs/command-center-additions.md`.
 
 Run the preview: `bun --port=4800 web/preview/index.html`, then open `http://localhost:4800/`. Surfaces: Feed, Round detail, Answered log, Agents (Roster and Lanes tabs), Settings. Times are fixed at 14:06:20 on 2026-11-20.
@@ -47,3 +49,7 @@ Legend: **Reused** = already specified and used as is. **Composed** = built here
 - **Toast placement.** The preview shows toasts inline in the Feed's `.hh-bay-status` region above the column. Live, a toast appearing or being dismissed there shifts every Round below it, which breaks "a new Round never moves scroll". The build uses `.hh-toast-region` (fixed, out of flow) moved under the app bar with glue `.pv-toasts { top: var(--pv-top); bottom: auto }`, because the design's bottom-end placement covers the sticky Answer bar. The announcement goes to a separate polite live region. Master should add a Command Center toast placement that neither shifts the Feed nor covers the Answer bar.
 - **Focusable headings.** After Send, `j`/`k` and index clicks, focus moves to the Round's `.hh-strip-header` (`tabindex="-1"`). The design has no focus rule for programmatically focused headings; glue keeps the ring for `:focus-visible` only.
 - **Feed index on narrow screens.** Below 64rem the index sits above the Feed, so each new entry would push the Rounds down. Glue caps `.pv-index-list` at three strip heights with its own scroll there.
+
+## Still open after 0b316ce
+
+- **Long config path in `.hh-config-source`.** The read-only config line has `flex-wrap` but no wrap rule for its children, so a long `config.toml` path (one unbroken mono word, e.g. under a temp `HERMES_HOME`) widened Settings to 503 px at a 390 px viewport. Hub glue in `web/src/app.css`: `.hh-config-source > * { min-width: 0; overflow-wrap: anywhere }`. Master should add it to `.hh-config-source`.

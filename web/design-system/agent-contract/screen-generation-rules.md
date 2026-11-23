@@ -4,17 +4,17 @@ This contract is mandatory for any agent building a Hermes Hub screen. It is sho
 
 ## Required flow
 
-1. **Name the screen goal and the device.** Desktop triage beside terminals, desktop detail or settings, or phone glance. One goal per screen.
+1. **Name the screen goal and the device.** The desktop Feed beside terminals, desktop detail, log, Agents or settings; phone glance only as a reference (the Hub's Phase 1 has no phone surface and no sign-in). One goal per screen.
 2. **Choose one blueprint** from [command-center-blueprints.md](../patterns/command-center-blueprints.md), [phone-blueprints.md](../patterns/phone-blueprints.md) or [system-blueprints.md](../patterns/system-blueprints.md). Copy its regions in order. If no blueprint fits, stop and propose one through [governance.md](../governance.md); never invent a layout inside a screen.
-3. **Set theme and density on purpose.** `html[data-theme="hermes-dark"]` (default) or `hermes-light`, or the world `hermes-<slug>` with `data-palette` that the Human chose. `data-density="compact"` on dense desktop regions (bay, log, roster); `data-density="glance"` on phone `main`. Never invent a theme or world in a screen.
+3. **Set theme and density on purpose.** `html[data-theme="hermes-dark"]` (default) or `hermes-light`, or the world `hermes-<slug>` with `data-palette` that the Human chose. `data-density="compact"` on dense desktop regions (Feed index, log, roster, the reference bay); `data-density="glance"` on phone `main`. Never invent a theme or world in a screen. Pages are full width: no content max-width, only `--hh-layout-measure` on lines of text.
 4. **Lay out with containers and layout primitives.** Strips for Rounds, cards for objects, panels for workspaces, shelves for collections, trays for temporary actions; `.hh-stack`, `.hh-row`, `.hh-grid`, `.hh-measure` for structure.
 5. **Use only documented components** and their classes: `.hh-<component>`, variants on `data-variant`, sizes on `data-size`, tone on `data-tone` (badges, alerts), Round status on `data-status` (strips), other state on ARIA or `data-state` ([components/](../components/)). Never hand-roll a strip, holder, timer, option row or overlay.
 6. **Give every Round its full status.** Holder with status word, callsign chip with text, Round id in mono, the Unanswered Policy sentence, and the timer only when the policy has a deadline.
-7. **Wire the keyboard map.** Roving focus in the desktop bay (listbox or grid per [round-widgets.md](../components/round-widgets.md#strip-bay--hh-strip-bay)); on phone a plain list of strip buttons. APG radio/checkbox for Questions; `a`/`r` only on the focused approve/reject Question; `⌘↵` submit, visible `.hh-kbd` hints and `aria-keyshortcuts`. Single-key shortcuts only inside the bay or the open Round, never in text fields.
-8. **Add live regions.** Bay status (`polite`) for new Rounds, thresholds and policy firing; `assertive` once for the open Round's final minute or cancellation; `role="alert"` only for failed submits and offline.
+7. **Wire the keyboard map.** In the Feed: `j`/`k` between Rounds, `1`–`9`, `a`/`r` on the current approve/reject Question only, `n` notes, `d` Dismiss, `e` Redirect, `v` Ask advisor, `⌘↵` send ([feed-widgets.md](../components/feed-widgets.md)). In the reference bay: roving focus (listbox or grid per [round-widgets.md](../components/round-widgets.md#strip-bay--hh-strip-bay)); on phone a plain list of strip buttons. APG radio/checkbox for Questions; visible `.hh-kbd` hints and `aria-keyshortcuts`. Single-key shortcuts only inside the Feed, the bay or the open Round, never in text fields.
+8. **Add live regions.** The Feed (or bay) status region (`.hh-bay-status`, `polite`) for new Rounds, Lock soon, Locks, ended Rounds and the reconnect summary; `assertive` once for the open Round's final minute or cancellation; `role="alert"` only for failed submits, offline, a required-field error and a config error. Toasts are never the announcement.
 9. **Use semantic tokens only.** No raw hex, no colour functions, no arbitrary spacing, no Tailwind palette or arbitrary values, no raw z-index, no literal durations. The validator rejects them outside `tokens/`.
 10. **Write Dispatcher copy.** Status word first, then count, then consequence. Callsign as subject. No chatter, emoji, exclamation marks or "Oops".
-11. **Include non-happy states.** Empty bay, loading, reconnecting, offline, expired, cancelled, Agent gone, submit failed, not found.
+11. **Include non-happy states.** Empty Feed, loading, reconnecting, offline, Lock soon, locked Question, expired, superseded, cancelled, Agent gone, Advisor unparsed or timed out, submit failed, config error, not found.
 12. **Check accessibility.** Contrast in both core themes, focus visible and not obscured, targets (≥ 24 CSS px compact, ≥ 3rem glance), non-colour status, reduced motion, keyboard path end to end.
 13. **Hand off with citations**: blueprint, density, theme, components and attributes, tokens, states, keyboard path, live-region copy, checks run.
 
@@ -43,7 +43,12 @@ All are `--hh-<name>` CSS variables or the Tailwind utilities that map to them.
 - Status by colour alone: a holder without its word, a coloured dot for an Agent without its callsign, a recommended tint without "Recommended".
 - A policy timer without its policy sentence, or any countdown on a "keep waiting" Round.
 - Auto-submitting the Human's Answer, or sending a draft when a policy fires.
-- New Rounds that steal focus or open overlays.
+- New Rounds that steal focus, move scroll, or open overlays; toasts in the page flow (use `.hh-toast-region[data-placement="top"]`).
+- Prefilling a free-text Answer with the recommended text, or preselecting a recommended option. Show it with **Use it**.
+- More than one sticky action bar, or a bar that hides the last Question or the focused control (use `.hh-answer-bar[data-sticky="true"]` inside a page-scroll Round).
+- Dimming a locked or ended Question to show it is read-only; the "Locked" or Outcome word says it.
+- A modal dialog for Dismiss, Redirect or Ask advisor; they are inline panels in the Round.
+- A content max-width on Command Center pages.
 - Single-key shortcuts listening on the whole document or inside text fields.
 - Gradient text, glass or `backdrop-filter`, glow outside live state, scanlines, noise or grain, neon text on near-black reading planes, textures behind text.
 - Blinking or flashing lamps; infinite animations (the spinner beside its words is the one loop); motion that carries meaning without a word.
@@ -65,11 +70,81 @@ All are `--hh-<name>` CSS variables or the Tailwind utilities that map to them.
 - Which non-happy states are included?
 - What happens under reduced motion?
 
-## Worked example: triage screen
+## Worked example: Feed
 
-Goal: the Human clears pending Rounds from the keyboard on a desktop.
+Goal: the Human answers every Pending Round in place on a desktop, from the keyboard.
 
-1. **Blueprint**: Triage ([command-center-blueprints.md](../patterns/command-center-blueprints.md#triage)).
+1. **Blueprint**: Feed ([command-center-blueprints.md](../patterns/command-center-blueprints.md)).
+2. **Theme and density**: `html[data-theme="hermes-flight-director"]`; `data-density="compact"` on the Feed index only.
+3. **Structure** (one Round shown):
+
+```html
+<a class="hh-skip-link" href="#pending-rounds">Skip to the Feed</a>
+<header class="hh-app-bar">…Hub · studio-mac · <span class="hh-live-value" data-live="true">Pending · 2</span> · .hh-connection…</header>
+<div class="hh-toast-region" data-placement="top"></div>
+<div class="hh-app-shell">
+  <nav class="hh-side-nav hh-app-shell-nav" aria-label="Command Center"><a href="/" aria-current="page">Feed <span class="hh-side-nav-count">2</span></a>…</nav>
+  <main class="hh-app-shell-main" tabindex="-1">
+    <div class="hh-feed">
+      <nav class="hh-feed-index" aria-labelledby="index-h" data-density="compact">
+        <div class="hh-feed-index-head"><h2 id="index-h" class="hh-heading-md">Feed</h2></div>
+        <fieldset class="hh-feed-index-filters"><legend class="hh-visually-hidden">Filter by callsign</legend>…<button class="hh-chip" aria-pressed="false">…</button></fieldset>
+        <ol class="hh-feed-index-list">
+          <li class="hh-feed-index-item"><a class="hh-feed-index-link" href="#r_7f3a91c0" aria-current="location">
+            <span class="hh-feed-index-meta"><span class="hh-callsign" data-agent="1">…CLAUDE·api-refactor…</span><span class="hh-mono-sm">Lock in 00:47</span></span>
+            <span class="hh-feed-index-title">Ship the v2 invoices route</span>
+            <span class="hh-feed-index-meta"><span class="hh-badge" data-tone="warning"><svg class="hh-icon" aria-hidden="true">…clock…</svg> Lock soon</span>
+              <span class="hh-feed-index-inview"><svg class="hh-icon" aria-hidden="true">…chevron-right…</svg> In view</span></span>
+          </a></li>
+        </ol>
+      </nav>
+      <div class="hh-feed-column" id="pending-rounds">
+        <div class="hh-bay-status" role="status"></div>
+        <ol class="hh-feed-list" aria-label="Pending Rounds">
+          <li class="hh-strip hh-feed-item" id="r_7f3a91c0" data-status="pending">
+            <div class="hh-strip-tab"><span>Pending</span> <span class="hh-mono-sm">r_7f3a91c0 · received 13:52</span></div>
+            <div class="hh-strip-paper">
+              <form class="hh-round" data-layout="page" aria-labelledby="r_7f3a91c0-h">
+                <div class="hh-round-head">
+                  <div class="hh-row">…callsign… <span class="hh-badge" data-tone="warning">…clock… Lock soon · 00:47 to next Lock</span></div>
+                  <h3 id="r_7f3a91c0-h" class="hh-strip-header hh-round-title" tabindex="-1">Ship the v2 invoices route</h3>
+                  <div class="hh-policy-badge"><span class="hh-badge">Policy</span> waits 15 min, then applies recommended <span class="hh-mono-sm">Next Lock in 00:47</span></div>
+                </div>
+                <ol class="hh-round-questions"><li class="hh-question">…</li></ol>
+                <div class="hh-answer-bar" data-sticky="true">
+                  <div class="hh-answer-bar-row">
+                    <span class="hh-answer-progress"><span class="hh-mono-sm">2 of 3 open Questions answered</span></span>
+                    <span class="hh-row">
+                      <button type="button" class="hh-button" data-variant="destructive" aria-expanded="false" aria-controls="r_7f3a91c0-dismiss" aria-keyshortcuts="d">Dismiss <kbd class="hh-kbd">d</kbd></button>
+                      <button type="button" class="hh-button" aria-expanded="false" aria-controls="r_7f3a91c0-redirect" aria-keyshortcuts="e">Redirect <kbd class="hh-kbd">e</kbd></button>
+                      <button type="button" class="hh-button" aria-expanded="false" aria-controls="r_7f3a91c0-advisor" aria-keyshortcuts="v">Ask advisor <kbd class="hh-kbd">v</kbd></button>
+                      <button type="submit" class="hh-button" data-variant="primary" aria-keyshortcuts="Meta+Enter Control+Enter">Send Answer <kbd class="hh-kbd">⌘↵</kbd></button>
+                    </span>
+                  </div>
+                </div>
+              </form>
+            </div>
+            <span class="hh-policy-timer" aria-hidden="true"><span class="hh-policy-timer-fill" data-fill="10"></span></span>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </main>
+</div>
+```
+
+4. **Components**: `hh-app-shell`, `hh-side-nav`, `hh-feed`, `hh-feed-index`, `hh-chip`, `hh-callsign`, `hh-badge`, `hh-strip`, `hh-round[data-layout="page"]`, `hh-question`, `hh-option`, `hh-recommended`, `hh-recommended-text`, `hh-proposal`, `hh-attachment` (diff with `hh-diff-fold`, `hh-attachment-prose`, `hh-attachment-image`), `hh-advisor-*`, `hh-inline-panel`, `hh-answer-bar[data-sticky]`, `hh-toast-region[data-placement="top"]`.
+5. **Tokens**: `background`, `strip`, `strip-foreground`, `pending`, `expired`, `recommended`, `accent`, `warning`, `info`, `surface-tray`, `ring`, `layout-sidebar-width`, `layout-sticky-top`, `layout-measure`, `strip-min-height`, `option-row-min-height`, `kbd-size`.
+6. **States**: Lock soon, locked Question with its Draft, ended in place (expired, superseded with Open r_…), Advisor working / ready / unparsed, Dismiss and Redirect panels with the required-field error, empty, reconnecting, offline.
+7. **Keyboard**: skip link → index → Round in view (`j`/`k`, `1`–`9`, `a`/`r`, `n`, `d`, `e`, `v`) → `⌘↵` → next Round's title.
+8. **Live regions**: "New Round · CODEX·billing-migration · 1 Question · Pending"; "CLAUDE·api-refactor · Lock soon · Q1 locks in 60 s, then applies recommended"; "r_5b2f90cd cancelled · replaced by r_7f3a91c0".
+9. **Checks**: validator passes; both core themes and Flight Director in each colour option; focus not obscured by the sticky bar or the app bar; one bar sticks at a time; no sideways scroll at 390 px.
+
+## Worked example: strip-bay triage (reference)
+
+Goal: the Human clears pending Rounds from a strip bay beside one open Round (the reference triage; the Hub uses the Feed).
+
+1. **Blueprint**: Strip-bay triage ([command-center-blueprints.md](../patterns/command-center-blueprints.md#strip-bay-triage-reference)).
 2. **Theme and density**: `html[data-theme="hermes-dark"]`; `data-density="compact"` on the bay region.
 3. **Structure**:
 

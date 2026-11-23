@@ -22,4 +22,4 @@ These are the confirmed specs for Hermes Hub Phase 1. Each was decided with the 
 **Primary sources:**
 - [Research notes](../research/README.md).
 - The throwaway Command Center prototype on branch [`prototype/command-center`](https://github.com/jazhou-adobe/hermes-hub/tree/prototype/command-center/prototype/command-center).
-- The Flight Director design in [`jazhou-adobe/apollo-tokens`, `brands/hermes/design`](https://github.com/jazhou-adobe/apollo-tokens/tree/1d03cf95ad82e400e88e346ff0cb8cb683ee58da/brands/hermes/design) @ `1d03cf9`, together with its [additions brief](https://github.com/jazhou-adobe/apollo-tokens/blob/1d03cf95ad82e400e88e346ff0cb8cb683ee58da/brands/hermes/design/briefs/command-center-additions.md).
+- The Flight Director design in [`jazhou-adobe/apollo-tokens`, `brands/hermes/design`](https://github.com/jazhou-adobe/apollo-tokens/tree/0b316ce29a5f18e14ddae1cfc4b2639a466ca9a1/brands/hermes/design) @ `0b316ce`, together with its [additions brief](https://github.com/jazhou-adobe/apollo-tokens/blob/0b316ce29a5f18e14ddae1cfc4b2639a466ca9a1/brands/hermes/design/briefs/command-center-additions.md).

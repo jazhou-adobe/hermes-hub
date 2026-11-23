@@ -45,7 +45,7 @@ function useInView(ids: string[], listRef: RefObject<HTMLOListElement | null>): 
   useEffect(() => {
     const o = observer.current;
     if (!o || !listRef.current) return;
-    const items = [...listRef.current.querySelectorAll<HTMLElement>(":scope > .pv-feed-item")];
+    const items = [...listRef.current.querySelectorAll<HTMLElement>(":scope > .hh-feed-item")];
     for (const item of items) o.observe(item);
     return () => {
       for (const item of items) o.unobserve(item);
@@ -63,9 +63,9 @@ function IndexEntry({ view, inView, offline, now }: { view: FeedRoundView; inVie
   const locked = Object.keys(view.locks).length;
   const answer = view.answer as Answer | null;
   return (
-    <li className="pv-index-item">
+    <li className="hh-feed-index-item">
       <a
-        className="pv-index-link"
+        className="hh-feed-index-link"
         href={`#${view.id}`}
         aria-current={inView ? "location" : undefined}
         onClick={(e) => {
@@ -75,8 +75,8 @@ function IndexEntry({ view, inView, offline, now }: { view: FeedRoundView; inVie
         }}
       >
         <Callsign name={view.session.callsign} />
-        <span className="pv-index-title">{view.round.title}</span>
-        <span className="pv-index-meta">
+        <span className="hh-feed-index-title">{view.round.title}</span>
+        <span className="hh-feed-index-meta">
           {pending ? (
             <span className="hh-mono-sm">
               {left === null ? "No deadline · keeps waiting" : `${countdown(left)} to next Lock`}
@@ -113,7 +113,7 @@ function IndexEntry({ view, inView, offline, now }: { view: FeedRoundView; inVie
               <Icon name="clock" /> Lock soon
             </span>
           ) : null}
-          <span className="pv-inview">
+          <span className="hh-feed-index-inview">
             <Icon name="chevron-right" /> In view
           </span>
         </span>
@@ -231,7 +231,7 @@ export function Feed() {
     function onKey(e: KeyboardEvent) {
       if (e.defaultPrevented || document.querySelector("dialog[open]")) return;
       const target = e.target as HTMLElement;
-      const focusedRound = target.closest?.(".pv-feed-item")?.id;
+      const focusedRound = target.closest?.(".hh-feed-item")?.id;
       const roundId = focusedRound ?? inView;
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
         if (!roundId) return;
@@ -267,8 +267,8 @@ export function Feed() {
   }, [ids, inView, shortcuts, setInView]);
 
   return (
-    <section className="pv-surface" aria-labelledby="feed-h">
-      <div className="pv-page-head">
+    <section className="hh-page" aria-labelledby="feed-h">
+      <div className="hh-page-head">
         <h1 className="hh-heading-lg" id="feed-h" tabIndex={-1}>
           Feed
         </h1>
@@ -280,8 +280,8 @@ export function Feed() {
       {!loaded ? (
         <div aria-busy="true" className="hh-stack">
           <p className="hh-body-sm">Loading Rounds…</p>
-          <span className="hh-skeleton pv-skel"></span>
-          <span className="hh-skeleton pv-skel"></span>
+          <span className="hh-skeleton" data-shape="strip"></span>
+          <span className="hh-skeleton" data-shape="strip"></span>
         </div>
       ) : rounds.length === 0 ? (
         <div className="hh-strip-bay-empty">
@@ -294,9 +294,9 @@ export function Feed() {
           </div>
         </div>
       ) : (
-        <div className="pv-feed-layout">
-          <aside className="pv-index hh-panel" data-density="compact" aria-labelledby="index-h">
-            <div className="pv-index-head">
+        <div className="hh-feed">
+          <aside className="hh-feed-index hh-panel" data-density="compact" aria-labelledby="index-h">
+            <div className="hh-feed-index-head">
               <h2 className="hh-heading-md" id="index-h">
                 Feed index
               </h2>
@@ -304,21 +304,23 @@ export function Feed() {
                 {filtering && shown.length === 0 ? "No Rounds match · Clear filters" : `Showing ${shown.length} of ${rounds.length}`}
               </span>
             </div>
-            <div role="group" aria-label="Filter by callsign" className="hh-row pv-chips">
+            <fieldset className="hh-feed-index-filters">
+              <legend className="hh-visually-hidden">Filter by callsign</legend>
               {callsigns.map((c) => (
                 <button key={c} type="button" className="hh-chip" aria-pressed={filters.callsigns.has(c)} onClick={() => toggle("callsigns", c)}>
                   <Callsign name={c} />
                 </button>
               ))}
-            </div>
+            </fieldset>
             {projects.length > 0 ? (
-              <div role="group" aria-label="Filter by project" className="hh-row pv-chips">
+              <fieldset className="hh-feed-index-filters">
+                <legend className="hh-visually-hidden">Filter by project</legend>
                 {projects.map((p) => (
                   <button key={p} type="button" className="hh-chip" aria-pressed={filters.projects.has(p)} onClick={() => toggle("projects", p)} title={p}>
                     {projectLabel(p)}
                   </button>
                 ))}
-              </div>
+              </fieldset>
             ) : null}
             {filtering ? (
               <div className="hh-row">
@@ -334,7 +336,7 @@ export function Feed() {
               </div>
             ) : null}
             <nav aria-label="Feed index">
-              <ul className="pv-index-list">
+              <ul className="hh-feed-index-list">
                 {shown.map((r) => (
                   <IndexEntry key={r.id} view={r} inView={r.id === inView} offline={offline} now={now} />
                 ))}
@@ -342,8 +344,8 @@ export function Feed() {
             </nav>
             {shortcuts ? <KeyList /> : null}
           </aside>
-          <div className="pv-feed-column">
-            <ol className="pv-feed-list" aria-label="Rounds in the Feed" ref={listRef}>
+          <div className="hh-feed-column">
+            <ol className="hh-feed-list" aria-label="Rounds in the Feed" ref={listRef}>
               {shown.map((r) =>
                 r.status === "pending" ? (
                   <PendingRound

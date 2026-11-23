@@ -64,7 +64,7 @@ export function Question(props: QuestionProps) {
             : "Not answered";
 
   return (
-    <li className="hh-question" id={id} data-current={current ? "true" : undefined}>
+    <li className="hh-question" id={id} data-current={current ? "true" : undefined} data-state={mode === "locked" ? "locked" : undefined}>
       <div className="hh-question-call">
         <div className="hh-question-meta">
           <span className="hh-mono-sm">
@@ -101,7 +101,7 @@ export function Question(props: QuestionProps) {
         <p className="hh-question-prompt" id={`${id}-p`}>
           {q.prompt}
         </p>
-        {q.detail ? <Markdown className="hh-body-sm hh-measure" text={q.detail} /> : null}
+        {q.detail ? <Markdown className="hh-body-sm hh-prose" text={q.detail} /> : null}
         {q.attachments?.map((a, i) => <Attachment key={i} attachment={a} />)}
       </div>
 
@@ -114,7 +114,7 @@ export function Question(props: QuestionProps) {
       )}
 
       {suggestion && suggestionState === "filled" ? (
-        <p className="pv-suggestion">
+        <p className="hh-advisor-suggestion">
           <span className="hh-badge" data-tone="info">
             <Icon name="check" /> Suggested by {suggestion.advisor}
           </span>{" "}
@@ -122,7 +122,7 @@ export function Question(props: QuestionProps) {
         </p>
       ) : null}
       {suggestion && suggestionState === "changed" ? (
-        <p className="pv-changed">
+        <p className="hh-advisor-changed">
           <span className="hh-badge" data-tone="warning">
             <Icon name="check" /> Changed from {suggestion.advisor}’s suggestion
           </span>{" "}
@@ -133,8 +133,8 @@ export function Question(props: QuestionProps) {
         </p>
       ) : null}
       {suggestion && suggestionState === "offer" ? (
-        <div className="pv-suggestion pv-suggest-offer">
-          <p className="hh-body-sm">
+        <div className="hh-advisor-offer">
+          <p className="hh-body-sm hh-advisor-rationale">
             <strong>
               {suggestion.advisor} suggests {describeValue(q, suggestion.value)}
             </strong>
@@ -146,7 +146,7 @@ export function Question(props: QuestionProps) {
         </div>
       ) : null}
       {mode === "locked" && isAnswered(props.draftValue) && JSON.stringify(props.draftValue) !== JSON.stringify(value) ? (
-        <div className="hh-alert pv-locked-draft" data-tone="warning" role="status">
+        <div className="hh-alert hh-question-draft" data-tone="warning" role="status">
           <span className="hh-badge" data-tone="expired">
             Not sent
           </span>
@@ -157,7 +157,7 @@ export function Question(props: QuestionProps) {
           </div>
           <div className="hh-row">
             <button type="button" className="hh-button" data-size="sm" onClick={props.onCopyDraft}>
-              <Icon name="file" /> Copy draft
+              <Icon name="copy" /> Copy draft
             </button>
           </div>
         </div>
@@ -286,9 +286,9 @@ function TextResponse(props: QuestionProps) {
   return (
     <div className="hh-question-response">
       {q.recommended && mode === "open" ? (
-        <div className="pv-recommended-text">
+        <div className="hh-recommended-text">
           <RecommendedMarker props={props} applied={false} />
-          <p className="hh-body pv-quote" id={`${id}-rec`}>
+          <p className="hh-body hh-recommended-text-quote" id={`${id}-rec`}>
             {q.recommended}
           </p>
           <button type="button" className="hh-button" data-size="sm" aria-describedby={`${id}-rec`} onClick={() => onChange?.({ text: q.recommended! })}>
@@ -335,7 +335,7 @@ function ApproveResponse(props: QuestionProps) {
   return (
     <fieldset className="hh-question-response" aria-labelledby={`${id}-p`} aria-describedby={`${id}-s`} disabled={readOnly}>
       {proposal ? (
-        <figure className="hh-attachment pv-proposal" data-state={edited ? "edited" : "original"}>
+        <figure className="hh-attachment hh-proposal" data-state={jsonError ? "invalid" : edited ? "edited" : proposal.editable && !readOnly ? "edit" : "read"}>
           <figcaption className="hh-attachment-head">
             <span className="hh-badge">
               <Icon name="code" /> {formatWord}
@@ -357,14 +357,14 @@ function ApproveResponse(props: QuestionProps) {
             <span className="hh-attachment-title hh-mono">Proposal · {proposal.format}</span>
           </figcaption>
           {proposal.editable && !readOnly ? (
-            <div className="pv-proposal-edit">
+            <div className="hh-proposal-edit">
               <div className="hh-field">
                 <label className="hh-label" htmlFor={`${id}-edit`}>
                   Edit the {proposal.format === "command" ? "command" : "proposal"} before approving
                 </label>
                 <textarea
                   id={`${id}-edit`}
-                  className="hh-textarea hh-mono pv-proposal-input"
+                  className="hh-textarea hh-proposal-input"
                   spellCheck={false}
                   rows={Math.min(12, Math.max(2, current.split("\n").length))}
                   value={current}
@@ -395,8 +395,8 @@ function ApproveResponse(props: QuestionProps) {
                   >
                     <Icon name="refresh" /> Reset to {view.session.callsign}’s version
                   </button>
-                  <details className="pv-agent-version">
-                    <summary className="pv-fold-summary">Show {view.session.callsign}’s version</summary>
+                  <details className="hh-proposal-original">
+                    <summary>Show {view.session.callsign}’s version</summary>
                     <pre className="hh-attachment-body" tabIndex={0} aria-label={`${view.session.callsign}’s version of the proposal`}>
                       <code>{original}</code>
                     </pre>
@@ -443,7 +443,7 @@ function ApproveResponse(props: QuestionProps) {
           );
         })}
       </div>
-      {!q.recommended ? <p className="hh-body-sm pv-paper-note">No recommendation from the Agent.</p> : null}
+      {!q.recommended ? <p className="hh-body-sm">No recommendation from the Agent.</p> : null}
     </fieldset>
   );
 }

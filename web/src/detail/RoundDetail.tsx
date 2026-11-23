@@ -70,8 +70,8 @@ function AnsweredRound({ detail }: { detail: RoundDetail }) {
   const answer = view.answer as Answer;
   const draft = draftValues(view.draft);
   return (
-    <RoundStrip view={view} as="div" className="pv-detail-strip">
-      <article className="hh-round" aria-labelledby="d-h">
+    <RoundStrip view={view} as="div" className="hh-feed-item">
+      <article className="hh-round" data-layout="page" aria-labelledby="d-h">
         <div className="hh-round-head">
           <div className="hh-row">
             <Callsign name={view.session.callsign} />
@@ -92,14 +92,14 @@ function AnsweredRound({ detail }: { detail: RoundDetail }) {
               </span>
             )}
           </div>
-          <h2 className="hh-strip-header" id="d-h">
+          <h2 className="hh-strip-header hh-round-title" id="d-h">
             {view.round.title}
           </h2>
-          {view.round.context ? <Markdown className="hh-body hh-measure" text={view.round.context} /> : null}
+          {view.round.context ? <Markdown className="hh-body hh-prose" text={view.round.context} /> : null}
           <div className="hh-row">
             <span className="hh-mono">{view.id}</span>
             <button type="button" className="hh-button" data-variant="ghost" data-size="sm" aria-label={`Copy id ${view.id}`} onClick={() => copy(view.id, "Round id")}>
-              <Icon name="file" /> Copy id
+              <Icon name="copy" /> Copy id
             </button>
             <button
               type="button"
@@ -117,7 +117,7 @@ function AnsweredRound({ detail }: { detail: RoundDetail }) {
                 )
               }
             >
-              <Icon name="file" /> Copy as Markdown
+              <Icon name="copy" /> Copy as Markdown
             </button>
             <span className="hh-mono-sm">
               Created {hhmmss(view.received_at)} · {answer.outcome} {hhmmss(answer.decided_at)}
@@ -152,7 +152,7 @@ function AnsweredRound({ detail }: { detail: RoundDetail }) {
                   </div>
                   <p className="hh-question-prompt">{q.prompt}</p>
                 </div>
-                <dl className="hh-dl pv-paper-dl">
+                <dl className="hh-dl">
                   <dt>Value</dt>
                   <dd>{describeValue(q, qa?.value)}</dd>
                   <dt>Set by</dt>
@@ -183,7 +183,7 @@ function AnsweredRound({ detail }: { detail: RoundDetail }) {
           })}
         </ol>
         {answer.message || answer.note ? (
-          <div className="pv-round-note">
+          <div className="hh-round-note">
             <p className="hh-label">{answer.outcome === "redirected" ? "Do this instead" : "Round note"}</p>
             <p className="hh-body">{answer.message ?? answer.note}</p>
           </div>
@@ -222,7 +222,7 @@ export function RoundDetailPage({ id }: { id: string }) {
   const fromFeed = view && (view.status === "pending" || detail?.in_feed);
 
   return (
-    <section className="pv-surface" aria-labelledby="detail-h">
+    <section className="hh-page" aria-labelledby="detail-h">
       <nav className="hh-breadcrumbs" aria-label="Breadcrumb">
         <ol>
           <li>
@@ -235,11 +235,11 @@ export function RoundDetailPage({ id }: { id: string }) {
           </li>
         </ol>
       </nav>
-      <div className="pv-page-head">
+      <div className="hh-page-head">
         <h1 className="hh-heading-lg" id="detail-h">
           Round detail
         </h1>
-        <p className="hh-mono pv-route">/rounds/{id}</p>
+        <p className="hh-mono">/rounds/{id}</p>
       </div>
       {error && !view ? (
         <section className="hh-card hh-stack" aria-labelledby="d-nf-h">
@@ -256,14 +256,14 @@ export function RoundDetailPage({ id }: { id: string }) {
       ) : !view ? (
         <div aria-busy="true" className="hh-stack">
           <p className="hh-body-sm">Loading the Round…</p>
-          <span className="hh-skeleton pv-skel"></span>
+          <span className="hh-skeleton" data-shape="strip"></span>
         </div>
       ) : (
         <>
           {view.status === "pending" ? (
-            <PendingRound key={view.id} view={view} advisors={advisors} inView offline={connection === "offline"} as="div" className="pv-detail-strip" />
+            <PendingRound key={view.id} view={view} advisors={advisors} inView offline={connection === "offline"} as="div" className="hh-feed-item" />
           ) : live ? (
-            <EndedRound view={view} as="div" className="pv-detail-strip" />
+            <EndedRound view={view} as="div" className="hh-feed-item" />
           ) : detail ? (
             <AnsweredRound detail={{ ...detail, view }} />
           ) : null}

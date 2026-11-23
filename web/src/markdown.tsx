@@ -33,7 +33,7 @@ function blocks(text: string): ReactNode[] {
       while (i < lines.length && !lines[i]!.trimStart().startsWith(fence[1]!)) body.push(lines[i++]!);
       i++;
       out.push(
-        <pre key={key++} className="pv-prose-code">
+        <pre key={key++}>
           <code>{body.join("\n")}</code>
         </pre>,
       );
@@ -42,7 +42,7 @@ function blocks(text: string): ReactNode[] {
     const heading = /^\s*#{1,6}\s+(.*)$/.exec(line);
     if (heading) {
       out.push(
-        <p key={key++} className="pv-prose-title">
+        <p key={key++}>
           <strong>{inline(heading[1]!, `h${key}`)}</strong>
         </p>,
       );

@@ -18,7 +18,7 @@ function Switch({ label, checked, onChange, hint }: { label: string; checked: bo
           <span className="hh-switch-thumb"></span>
         </span>
         <span className="hh-body-sm">{label}</span>
-        <span className="pv-switch-state hh-mono-sm" aria-hidden="true">
+        <span className="hh-switch-state" aria-hidden="true">
           {checked ? "On" : "Off"}
         </span>
       </button>
@@ -77,8 +77,8 @@ export function Settings() {
   const status = config?.status;
 
   return (
-    <section className="pv-surface" aria-labelledby="settings-h">
-      <div className="pv-page-head">
+    <section className="hh-page" aria-labelledby="settings-h">
+      <div className="hh-page-head">
         <h1 className="hh-heading-lg" id="settings-h">
           Settings
         </h1>
@@ -91,7 +91,7 @@ export function Settings() {
           {error}
         </p>
       ) : null}
-      <div className="pv-settings-grid">
+      <div className="hh-settings">
         <nav className="hh-side-nav hh-panel" aria-label="Settings sections">
           <a href="#set-config">
             <Icon name="file" /> config.toml
@@ -106,7 +106,7 @@ export function Settings() {
             <Icon name="bay" /> Storage
           </a>
         </nav>
-        <div className="hh-stack">
+        <div className="hh-settings-panels">
           <section className="hh-card hh-stack" id="set-config" aria-labelledby="set-config-h">
             <h2 className="hh-heading-md" id="set-config-h">
               From config.toml · read-only
@@ -117,7 +117,7 @@ export function Settings() {
               </p>
             ) : (
               <>
-                <div className="hh-row">
+                <div className="hh-config-source">
                   {status?.error ? (
                     <span className="hh-badge" data-tone="destructive">
                       <Icon name="alert" /> Config error
@@ -131,7 +131,7 @@ export function Settings() {
                     <>
                       <span className="hh-mono">{status.path}</span>
                       <button type="button" className="hh-button" data-variant="ghost" data-size="sm" aria-label="Copy config path" onClick={() => copy(status.path!, "Config path")}>
-                        <Icon name="file" /> Copy
+                        <Icon name="copy" /> Copy
                       </button>
                     </>
                   ) : (
@@ -296,7 +296,7 @@ export function Settings() {
               onChange={(on) => update({ quiet_hours: { ...settings.quiet_hours, enabled: on } })}
               hint="Silences browser and macOS notifications and the sound. Rounds still arrive and show in the Feed."
             />
-            <div className="pv-time-row">
+            <div className="hh-field-pair">
               <div className="hh-field">
                 <label className="hh-label" htmlFor="qh-from">
                   From
@@ -336,7 +336,7 @@ export function Settings() {
             <h2 className="hh-heading-md" id="set-appearance-h">
               Appearance
             </h2>
-            <div className="pv-time-row">
+            <div className="hh-field-pair">
               <div className="hh-field">
                 <label className="hh-label" htmlFor="theme-select">
                   Theme

@@ -1,5 +1,7 @@
 # Phone blueprints (glance)
 
+**Reference only.** The Hub's Phase 1 has no phone surface (it is local only); these blueprints stay as the reference for glance density and a later tailnet mode.
+
 The phone is the second screen: quick approve/reject over the tailnet when the Human is away from the desk. Every phone page sets `data-density="glance"` on `<main>`: `button-min-target` ≥ 3rem, taller `option-row-min-height`, roomier `density-*`, larger `type-body-size`. No keyboard hints are shown. In the preview, the strip bay applies glance itself whenever it stacks into the phone flow, unless the page has set a density explicitly (a `?density=` override wins).
 
 Shared chrome: skip link → compact `.hh-app-bar` ("Pending · N" and `.hh-connection` word) → `main` → `.hh-bottom-nav` (Pending, Log, Agents) ([navigation-and-chrome.md](../components/navigation-and-chrome.md#bottom-navigation--hh-bottom-nav)).

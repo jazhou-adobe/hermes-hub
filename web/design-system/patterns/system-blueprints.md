@@ -1,6 +1,8 @@
 # System blueprints
 
-Pages and full-region states outside normal triage: sign-in, not reachable, reconnecting, empty and error. Each uses the same tokens, chrome and Dispatcher voice: status word, cause, next step.
+Pages and full-region states outside normal work in the Feed: sign-in, not reachable, reconnecting, empty and error. Each uses the same tokens, chrome and Dispatcher voice: status word, cause, next step.
+
+**Hub Phase 1:** the Hub is local only and has no sign-in, so the Sign-in blueprint is a reference for a later exposure mode, not part of the Hub's Command Center. Not reachable, Reconnecting, Offline, Empty and Error apply to the Feed and every page.
 
 ## Sign-in
 
@@ -76,4 +78,4 @@ Errors never blame the Human and never use "Oops".
 
 ## Expired and cancelled
 
-Covered on each Round surface ([command-center-blueprints.md](command-center-blueprints.md#triage), [phone-blueprints.md](phone-blueprints.md#single-round-approvereject)): grey hatched holder, "Expired" or "Cancelled", the outcome sentence, and any unsent draft marked "Not sent".
+Covered on each Round surface ([command-center-blueprints.md](command-center-blueprints.md), Feed and Round detail; [phone-blueprints.md](phone-blueprints.md#single-round-approvereject)): grey hatched holder, "Expired" or "Cancelled", the outcome sentence, and any unsent draft marked "Not sent". In the Feed they end in place until the Human removes them.

@@ -6,13 +6,20 @@ Tables, list rows, progress, alerts and charts. In Hermes these show the answere
 
 Used for the answered log (desktop), the roster table and the token list.
 
-- Anatomy: `.hh-table-wrap` (scrolls horizontally on narrow screens) > `<table class="hh-table">` with `<caption>` (visible or `.hh-visually-hidden`), `<thead>` with `scope="col"` headers, `<tbody>` rows, an optional last cell of row actions.
+- Anatomy: `.hh-table-wrap` (scrolls horizontally on narrow screens; `position: relative`, so visually hidden header text is clipped by the wrap instead of widening the page) > `<table class="hh-table">` with `<caption>` (visible or `.hh-visually-hidden`), `<thead>` with `scope="col"` headers, `<tbody>` rows, an optional last cell of row actions. Buttons in cells wrap their label rather than widen the table.
 - Tokens: inherits the surface it sits on; `--hh-border` rules under every row (full width, never a one-side stripe); `--hh-density-row-height`; headers in uppercase label type on `--hh-muted-foreground`; `td[data-numeric]` or `td.hh-mono` for ids, callsigns, counts and times in mono tabular numerals.
 - Sortable columns use a button in the header with `aria-sort` on the `th`.
 - Compact density is the default for tables in the Command Center.
 - A static table is not a grid: arrow-key navigation is only for the strip bay ([round-widgets.md](round-widgets.md#strip-bay--hh-strip-bay)).
 
-Answered log columns: Status (word + icon), Round (title), Agent (callsign), Questions (count), Outcome ("Approved", "Applied recommended", "Cancelled by Agent"), Time (HH:MM). The status column always shows the word.
+Answered log columns: Outcome (word), Round (title, callsign, id), Values and who set them, Delivery, Ended (HH:MM); see [status-widgets.md](status-widgets.md) (Answered log). The Outcome column always shows the word.
+
+- **Search match**: `mark.hh-match` on `--hh-primary` / `--hh-primary-foreground` around each match; the count is in words beside the results ("1 match for "invoice"").
+- **Filter tray**: `.hh-filter-tray` (bordered, `--hh-density-inset` padding) holds the search field (capped at `--hh-layout-measure`), chip groups (`role="group"` with a label each) and `.hh-filter-tray-actions` (export actions, the count, Clear filters).
+
+## Description list — `.hh-dl`
+
+Two columns: `dt` (label, body-sm, `--hh-muted-foreground`) and `dd` (value, wraps anywhere). On strip paper, muted ink never passes contrast, so inside `.hh-strip-paper` or `.hh-round`, or on `.hh-dl[data-plane="strip"]`, the `dt` takes the paper's own ink in bold instead; the same rule gives `.hh-hint`, `.hh-muted` and table headers the paper ink there.
 
 ## List row — `.hh-list-row`
 

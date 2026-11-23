@@ -15,6 +15,7 @@ The Unanswered Policy countdown along the bottom edge of a strip's holder.
 
 - The rail takes `--holder` (falling back to `--hh-muted`) and the fill takes `--holder-foreground`, so the timer always matches its strip's status and passes the same contrast pair.
 - `--timer-fraction` (0–1) is set by script from the remaining time; the fill shrinks from the end on `--hh-easing-linear`.
+- **Strict Content-Security-Policy.** A page whose policy blocks `style=""` attributes in markup (no `'unsafe-inline'` for styles) has two paths. Script may set the property through the CSSOM (`element.style.setProperty('--timer-fraction', '0.42')`, or React's `style` prop in a client-rendered app), which such a policy allows. Static or server-rendered markup sets `data-fill="0…100"` in steps of 5 on `.hh-policy-timer-fill` (or `.hh-progress-fill`): the stylesheet maps each step to `--timer-fraction` and `--progress-value`. Round to the nearest step; the written time stays exact.
 - `data-policy="wait"` (keep waiting) has no countdown: the fill becomes a dashed rail and the strip's policy text reads "keeps waiting · 12m".
 - The time and the policy are always written out in the strip (`.hh-strip-policy`: "09:58 · then applies recommended"). The rail is never the only signal.
 - Thresholds at 5 min and 1 min add the words "5 min left" / "1 min left" to the policy text. The timer does not turn red: it is not an error.
@@ -25,6 +26,10 @@ The Unanswered Policy countdown along the bottom edge of a strip's holder.
 ### Policy badge — `.hh-policy-badge`
 
 A cluster in the Round head and Question meta naming the policy in words: `.hh-badge` "Policy" + "keep waiting" / "apply recommended" / "cancel", with the deadline in mono when there is one ("at 14:10"). A popover button ("What happens at zero?") explains the consequence for the Agent.
+
+### Per-Question policy
+
+When a Question declares its own Unanswered Policy, its meta carries a `.hh-policy-badge` with `.hh-badge[data-tone="info"]` "Own policy" (clock icon) and the consequence and time left in mono: "cancels at 14:12:07 · 05:47 left" or "applies recommended at 14:12:07 · 05:47 left". It counts toward the Round's next Lock and Lock soon ([feed-widgets.md](feed-widgets.md)). When it fires, the Question locks ([round-widgets.md](round-widgets.md), Locked Question).
 
 ### Tokens
 
@@ -69,12 +74,13 @@ The visible key map.
 
 ## Answered log — `.hh-answered-log`
 
-The record of every Round that left the bay: answered, expired, cancelled.
+The record of every Round that left the Feed (or the bay) or ended in it: answered, dismissed, redirected, expired, cancelled.
 
-- Desktop: `.hh-answered-log` wraps a `.hh-table` in compact density ([data-display.md](data-display.md#table--hh-table)), newest first, grouped by day.
+- Desktop: `.hh-answered-log` wraps a `.hh-table` in compact density ([data-display.md](data-display.md#table--hh-table)), newest first, grouped by day: each day opens its own `tbody` with a heading row `tr.hh-answered-log-day > th[scope="colgroup"]` ("Today · 20 Nov") on `--hh-surface-shelf`.
 - Phone: entries render as articles in an [APG feed](https://www.w3.org/WAI/ARIA/apg/patterns/feed/): `role="feed"`, `role="article"` entries, `aria-busy` while loading more, Page Down / Page Up between articles.
-- Each entry: status `.hh-badge[data-tone="answered|expired"]` with its word, Round title, callsign, Question count, outcome in words, time. Expanding shows each Question with its value and who set it ("You", "Policy: applied recommended", "Cancelled by Agent").
+- Columns: **Outcome** (badge with the word: Answered in the answered tone; Dismissed, Redirected, Expired, Cancelled in the expired tone), **Round** (title, callsign, id in mono), **Values and who set them** (`ul.hh-log-values`: "Q1 Approve (edited) · You", "Q2 Three retries · suggested by codex-review", "Q1 Approve · Policy: applied recommended", a Redirect message or Dismiss note; the setter in `.hh-log-setter`), **Delivery**, **Ended** (HH:MM).
+- Delivery, in words: "Delivered 13:34:09" (mono) once the Agent picked the Answer up; "Waiting for pickup · since 11:02" while it has not; `.hh-badge[data-tone="warning"]` "Not picked up · Agent gone" when the session ended first; "Replaced by r_…" for a superseded Round.
 - Drafts that were never sent show "Not sent" with the draft text.
-- Filters: status and callsign chips; text search over titles.
-- Empty: "No answered Rounds yet."
-- Tokens: `--hh-answered`, `--hh-expired`, `--hh-surface-card`, `--hh-border`, `--hh-density-row-height`, `--hh-type-mono-*`, `--hh-overlay-tooltip-width` (outcome column minimum).
+- Filter tray (`.hh-filter-tray`, [data-display.md](data-display.md)): search over titles and values, Outcome chips, callsign, project and date chips; `.hh-filter-tray-actions` holds **Copy as Markdown** and **Export JSON** and the count ("Showing 5 of 41 · 1 match for "invoice""). Search matches are marked with `mark.hh-match`.
+- Empty: "No answered Rounds yet." (`.hh-empty-state`). Filtered empty: "No Rounds match · Clear filters".
+- Tokens: `--hh-answered`, `--hh-expired`, `--hh-warning`, `--hh-surface-card`, `--hh-surface-shelf`, `--hh-primary` (match), `--hh-border`, `--hh-density-row-height`, `--hh-type-mono-*`, `--hh-overlay-tooltip-width` (outcome column minimum).

@@ -3,7 +3,7 @@
 Status: **confirmed by the Human on 2026-11-20**, ticket [What front-end stack does the Command Center use?](https://github.com/jazhou-adobe/hermes-hub/issues/15).
 
 - **Builds on:** the [Command Center behaviour](command-center.md), [security](security.md) and [transports](transports.md) specs.
-- **Design source:** [`jazhou-adobe/apollo-tokens`, `brands/hermes/design`](https://github.com/jazhou-adobe/apollo-tokens/tree/1d03cf95ad82e400e88e346ff0cb8cb683ee58da/brands/hermes/design) @ `1d03cf9` (Flight Director 2169); the copied commit is recorded in [`web/design-system/SOURCE.md`](../../web/design-system/SOURCE.md).
+- **Design source:** [`jazhou-adobe/apollo-tokens`, `brands/hermes/design`](https://github.com/jazhou-adobe/apollo-tokens/tree/0b316ce29a5f18e14ddae1cfc4b2639a466ca9a1/brands/hermes/design) @ `0b316ce` (Flight Director 2169); the copied commit is recorded in [`web/design-system/SOURCE.md`](../../web/design-system/SOURCE.md).
 
 ## Decision
 
@@ -39,7 +39,7 @@ web/
 │   ├── api.ts                 typed fetch for actions; types from the Round/Answer schema
 │   ├── notify.ts              browser notifications, permission, sound
 │   ├── keys.tsx               key map, the `?` dialog, text-field guard
-│   ├── app.css                design-system imports + layout glue ported from web/preview (`pv-` classes)
+│   ├── app.css                design-system imports in the adoption order + glue for gaps still open in the master
 │   ├── feed/ …                Feed, index, Round, Question, Attachment, action bar
 │   └── detail/ … agents/ … log/ … settings/ …
 ├── preview/                   the approved static Feed preview (the visual reference) and GAPS.md
@@ -67,7 +67,7 @@ The design master has no React widgets for these screens yet, so the components 
   2. `hermes-components.css` in `layer(components)`
   3. the world stylesheet, unlayered
   4. the base layer from the design's `globals.css` (`base.css`)
-- **No Tailwind.** Layout glue is plain CSS on `--hh-*` tokens in `web/src/app.css`, ported from the approved preview; component looks come from the design's classes (`.hh-*`). `tailwind-theme.css` stays copied for a future change.
+- **No Tailwind.** Layout and component looks both come from the design's classes (`.hh-*`, including the Command Center layout classes added in apollo-tokens PR #1). `web/src/app.css` imports the design system and keeps only glue for gaps the master has not covered yet, each commented and listed in `web/preview/GAPS.md`. `tailwind-theme.css` stays copied for a future change.
 - **Full width.** The shell, Feed column, Round strips, log table, Agents, Lanes and Settings span the viewport beside the side nav and the Feed index. Only typographic measures (`--hh-layout-measure` on prose, Question text and the search input) cap line length.
 - **Motion** uses only the `--hh-motion-*` and `--hh-easing-*` tokens, and respects reduced motion (`foundations/motion.md`).
 

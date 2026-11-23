@@ -6,23 +6,23 @@ The Command Center has little chrome: an app bar with the connection state, a si
 
 | Region | Desktop (≥ 64rem) | Phone (glance) |
 |---|---|---|
-| Skip link | `.hh-skip-link` → strip bay or main | Same |
+| Skip link | `.hh-skip-link` → the Feed (or strip bay) or main | Same |
 | App bar | `.hh-app-bar`: Hub name, pending count, `.hh-connection`, keyboard hints button, settings | Same, condensed: pending count and connection only |
-| Navigation | `.hh-side-nav`: Triage, Answered log, Agents, Settings | `.hh-bottom-nav`: Pending, Log, Agents |
+| Navigation | `.hh-side-nav` in `.hh-app-shell`: Feed, Answered log, Agents, Settings | `.hh-bottom-nav`: Pending, Log, Agents (reference; the Hub's Phase 1 has no phone surface) |
 | Wayfinding | `.hh-breadcrumbs` in Agent detail and settings sub-pages | Back link |
 
 ## App bar — `.hh-app-bar`
 
 - Anatomy: `.hh-app-bar-brand` (Hub name in the strip-header face, set by the Human, e.g. "Hub · studio-mac"), the pending count as a `.hh-live-value` ("Pending · 3"), `.hh-app-bar-spacer`, `.hh-connection` ([status-widgets.md](status-widgets.md#connection--hh-connection)), actions (keyboard hints `?`, settings).
 - Sticky at the top on `--hh-layer-sticky`. Tokens: `--hh-surface-tray` / `--hh-surface-tray-foreground`, `--hh-border` on the bottom edge across the full width, `--hh-density-gap`.
-- The pending count is part of the page title too ("(3) Triage · Hermes Hub") so it shows in the browser tab.
+- The pending count is part of the page title too ("(3) Feed · Hermes Hub") so it shows in the browser tab.
 - Landmark: `<header>`. The count is not a live region; the bay status region announces changes ([accessibility.md](../foundations/accessibility.md#live-regions)).
 
 ## Side navigation — `.hh-side-nav`
 
 - `<nav aria-label="Command Center">` with links at least `--hh-button-min-target` tall. The current page has `aria-current="page"` and an `--hh-accent` / `--hh-accent-foreground` fill across the whole item, never a side bar; add a leading icon or heavier weight so the current item is not marked by fill colour alone.
-- Each item may end with a `.hh-side-nav-count` (mono, tabular): "Triage 3". Counts are in the accessible name ("Triage, 3 pending").
-- Below 64rem it moves into a sheet opened from the app bar ([overlays.md](overlays.md#sheet--hh-sheet)).
+- Each item may end with a `.hh-side-nav-count` (mono, tabular): "Feed 3". Counts are in the accessible name ("Feed, 3 pending").
+- In the Command Center shell (`.hh-app-shell`, [feed-widgets.md](feed-widgets.md)) the side nav is a wrapping row above the page below 64rem and a sticky column from 64rem. Elsewhere, below 64rem, it may move into a sheet opened from the app bar ([overlays.md](overlays.md#sheet--hh-sheet)).
 
 ## Bottom navigation — `.hh-bottom-nav`
 
@@ -53,12 +53,20 @@ First focusable element: "Skip to strip bay" on triage, "Skip to content" elsewh
 - Selected: `--hh-foreground` text (others `--hh-muted-foreground`) and a heavy underline in `--hh-accent` across the tab; the underline is the shape cue, so selection never depends on text colour alone.
 - Tabs never hold the strip bay's filters; those are chips ([inputs.md](inputs.md#chip--hh-chip)).
 
+## Icons — `.hh-icon`
+
+Line icons on a 24-unit grid, drawn in `currentColor`. The path data is `preview/hermes-icons.json` (icon name → SVG path), the file apps copy; the preview's `Icon` component and any app sprite read it. The stroke lives in `.hh-icon` (`fill: none`, `stroke: currentColor`, `stroke-width: var(--hh-border-width-thick)`, round caps and joins), so an inline `<svg class="hh-icon" viewBox="0 0 24 24"><path d="…"/></svg>` needs no presentation attributes; size `--hh-icon-size`.
+
+- Set: `check`, `x`, `clock`, `chevron-down`, `chevron-right`, `link`, `file`, `code`, `diff`, `markdown`, `image`, `keyboard`, `signal`, `alert`, `user`, `menu`, `more`, `settings`, `send`, `lock`, `lock-open`, `copy`, `trash`, `refresh`, `bay`, `arrow-right`, `arrow-left`.
+- Decorative by default (`aria-hidden="true"`, `focusable="false"`) beside words; an icon that names a control alone takes `role="img"` and `aria-label`, and the control a tooltip.
+- Never a Unicode glyph or emoji in place of an icon (triangles, check marks, warning signs); the validator fails them in code and styles. The Feed index's In view cue is `chevron-right` plus the words.
+
 ## Accessibility behaviour
 
-- Landmarks: `header`, `nav`, `main`, and `aside` for the open Round beside the bay.
+- Landmarks: `header`, `nav`, `main`, and `aside` for the open Round beside the bay or the Round drawer beside the lanes.
 - Page titles name the view and the pending count.
 - Focus moves to the main heading after navigation; the skip link stays first.
-- The app bar never hides the focused strip (SC 2.4.11): the bay scrolls with `scroll-padding-top` equal to the app bar height.
+- The app bar never hides the focused strip or Round (SC 2.4.11): sticky regions sit at `--hh-layout-sticky-top`, and a page with a sticky Answer bar sets `scroll-padding-block` for both edges.
 
 ## Agent recipe
 

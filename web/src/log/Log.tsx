@@ -52,7 +52,7 @@ function renderSnippet(snippet: string): ReactNode {
       return null;
     }
     return marking ? (
-      <mark key={i} className="pv-match">
+      <mark key={i} className="hh-match">
         {part}
       </mark>
     ) : (
@@ -127,14 +127,14 @@ function LogTable({ label, entries }: { label: string; entries: LogEntry[] }) {
                   </span>
                 </td>
                 <td>
-                  <ul className="pv-values">
+                  <ul className="hh-log-values">
                     {round.questions.map((q, i) => {
                       const qa = answer.questions[q.id];
                       const draft = entry.draft?.questions?.[q.id]?.value;
                       return (
                         <li key={q.id}>
                           <span className="hh-mono-sm">Q{i + 1}</span> <span>{describeValue(q, qa?.value ?? draft)}</span>{" "}
-                          <span className="hh-body-sm pv-setter">· {qa && qa.set_by !== "none" ? formatSetter(qa) : draft != null ? "Draft · Not sent" : "Not set"}</span>
+                          <span className="hh-body-sm hh-log-setter">· {qa && qa.set_by !== "none" ? formatSetter(qa) : draft != null ? "Draft · Not sent" : "Not set"}</span>
                         </li>
                       );
                     })}
@@ -158,7 +158,7 @@ function LogTable({ label, entries }: { label: string; entries: LogEntry[] }) {
                     aria-label={`Copy as Markdown ${meta.round_id}`}
                     onClick={() => copy(entryMarkdown(entry), "Markdown")}
                   >
-                    <Icon name="file" /> Copy as Markdown
+                    <Icon name="copy" /> Copy as Markdown
                   </button>
                 </td>
               </tr>
@@ -251,95 +251,93 @@ export function Log() {
 
   const shown = entries ?? [];
   return (
-    <section className="pv-surface" aria-labelledby="log-h">
-      <div className="pv-page-head">
+    <section className="hh-page" aria-labelledby="log-h">
+      <div className="hh-page-head">
         <h1 className="hh-heading-lg" id="log-h">
           Answered log
         </h1>
         <span className="hh-mono">{plural(all.length, "ended Round")}</span>
       </div>
-      <div className="hh-tray pv-filters" data-density="compact">
-        <div className="pv-filter-grid">
-          <div className="hh-field">
-            <label className="hh-label" htmlFor="log-search">
-              Search
-            </label>
-            <input
-              id="log-search"
-              className="hh-input"
-              type="search"
-              value={searchInput}
-              placeholder="Titles, Questions, answers, notes"
-              aria-describedby="log-search-hint"
-              onChange={(e) => setSearchInput(e.target.value)}
-            />
-            <p className="hh-hint" id="log-search-hint">
-              Full-text over Round titles and context, Question prompts, options, free-text answers, notes and redirect messages. Attachment contents
-              are not indexed.
-            </p>
-          </div>
-          <div role="group" aria-label="Filter by Outcome" className="hh-row">
-            {OUTCOMES.map((o) => (
-              <button key={o} type="button" className="hh-chip" aria-pressed={outcome === o} onClick={() => setOutcome(outcome === o ? undefined : o)}>
-                {OUTCOME_WORDS[o]}
+      <div className="hh-tray hh-filter-tray" data-density="compact">
+        <div className="hh-field">
+          <label className="hh-label" htmlFor="log-search">
+            Search
+          </label>
+          <input
+            id="log-search"
+            className="hh-input"
+            type="search"
+            value={searchInput}
+            placeholder="Titles, Questions, answers, notes"
+            aria-describedby="log-search-hint"
+            onChange={(e) => setSearchInput(e.target.value)}
+          />
+          <p className="hh-hint" id="log-search-hint">
+            Full-text over Round titles and context, Question prompts, options, free-text answers, notes and redirect messages. Attachment contents
+            are not indexed.
+          </p>
+        </div>
+        <div role="group" aria-label="Filter by Outcome" className="hh-row">
+          {OUTCOMES.map((o) => (
+            <button key={o} type="button" className="hh-chip" aria-pressed={outcome === o} onClick={() => setOutcome(outcome === o ? undefined : o)}>
+              {OUTCOME_WORDS[o]}
+            </button>
+          ))}
+        </div>
+        {allCallsigns.length > 0 ? (
+          <div role="group" aria-label="Filter by callsign" className="hh-row">
+            {allCallsigns.map((c) => (
+              <button key={c} type="button" className="hh-chip" aria-pressed={callsign === c} onClick={() => setCallsign(callsign === c ? undefined : c)}>
+                <Callsign name={c} />
               </button>
             ))}
           </div>
-          {allCallsigns.length > 0 ? (
-            <div role="group" aria-label="Filter by callsign" className="hh-row">
-              {allCallsigns.map((c) => (
-                <button key={c} type="button" className="hh-chip" aria-pressed={callsign === c} onClick={() => setCallsign(callsign === c ? undefined : c)}>
-                  <Callsign name={c} />
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {allProjects.length > 0 ? (
-            <div role="group" aria-label="Filter by project" className="hh-row">
-              {allProjects.map((p) => (
-                <button key={p} type="button" className="hh-chip" aria-pressed={project === p} title={p} onClick={() => setProject(project === p ? undefined : p)}>
-                  {projectLabel(p)}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <div role="group" aria-label="Filter by date range" className="hh-row">
-            {RANGES.map(([r, label]) => (
-              <button key={r} type="button" className="hh-chip" aria-pressed={range === r} onClick={() => setRange(r)}>
-                {label}
+        ) : null}
+        {allProjects.length > 0 ? (
+          <div role="group" aria-label="Filter by project" className="hh-row">
+            {allProjects.map((p) => (
+              <button key={p} type="button" className="hh-chip" aria-pressed={project === p} title={p} onClick={() => setProject(project === p ? undefined : p)}>
+                {projectLabel(p)}
               </button>
             ))}
           </div>
-          {range === "custom" ? (
-            <div className="pv-time-row">
-              <div className="hh-field">
-                <label className="hh-label" htmlFor="log-from">
-                  From
-                </label>
-                <input id="log-from" className="hh-input hh-mono" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-              </div>
-              <div className="hh-field">
-                <label className="hh-label" htmlFor="log-to">
-                  To
-                </label>
-                <input id="log-to" className="hh-input hh-mono" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-              </div>
+        ) : null}
+        <div role="group" aria-label="Filter by date range" className="hh-row">
+          {RANGES.map(([r, label]) => (
+            <button key={r} type="button" className="hh-chip" aria-pressed={range === r} onClick={() => setRange(r)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {range === "custom" ? (
+          <div className="hh-field-pair">
+            <div className="hh-field">
+              <label className="hh-label" htmlFor="log-from">
+                From
+              </label>
+              <input id="log-from" className="hh-input hh-mono" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
             </div>
-          ) : null}
-          <div className="hh-row pv-filter-actions">
-            <span className="hh-mono-sm" role="status">
-              {entries === null ? "Loading…" : shown.length ? `Showing ${shown.length} of ${all.length}` : "No Rounds match · Clear filters"}
-            </span>
-            {hasFilters ? (
-              <button type="button" className="hh-button" data-variant="ghost" data-size="sm" onClick={clearFilters}>
-                Clear filters
-              </button>
-            ) : null}
-            <a className="hh-button" data-size="sm" href={logExportUrl(filter)}>
-              <Icon name="file" /> Export JSON
-            </a>
-            <span className="hh-mono-sm">hermes-log-{localDay(new Date().toISOString())}.json · the filtered log</span>
+            <div className="hh-field">
+              <label className="hh-label" htmlFor="log-to">
+                To
+              </label>
+              <input id="log-to" className="hh-input hh-mono" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+            </div>
           </div>
+        ) : null}
+        <div className="hh-filter-tray-actions">
+          <span className="hh-mono-sm" role="status">
+            {entries === null ? "Loading…" : shown.length ? `Showing ${shown.length} of ${all.length}` : "No Rounds match · Clear filters"}
+          </span>
+          {hasFilters ? (
+            <button type="button" className="hh-button" data-variant="ghost" data-size="sm" onClick={clearFilters}>
+              Clear filters
+            </button>
+          ) : null}
+          <a className="hh-button" data-size="sm" href={logExportUrl(filter)}>
+            <Icon name="file" /> Export JSON
+          </a>
+          <span className="hh-mono-sm">hermes-log-{localDay(new Date().toISOString())}.json · the filtered log</span>
         </div>
       </div>
       {error ? (
