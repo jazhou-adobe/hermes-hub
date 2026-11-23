@@ -1,4 +1,5 @@
 import { rmSync, writeFileSync } from "node:fs";
+import { refreshUncommittedSkills } from "../cli/skill.ts";
 import { loadConfig, type HubConfig } from "../config.ts";
 import { migrationStatus, openDb } from "../db/db.ts";
 import { backupsDir, configPath, dbPath, hubJsonPath, hubLockPath, logPath } from "../paths.ts";
@@ -122,5 +123,16 @@ export async function runHub(): Promise<number | undefined> {
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
   console.log(`Hermes Hub ${VERSION} on ${url}`);
+  // Hub Skill copies (hub-skill spec): only uncommitted ones, so the Hub never makes a surprise diff.
+  try {
+    for (const line of refreshUncommittedSkills()) {
+      console.log(`hermes hub: ${line}`);
+      logger.log("info", "skill.refreshed", {});
+    }
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.error(`hermes hub: could not refresh the hermes-hub skill copies: ${error}`);
+    logger.log("warn", "skill.refresh_failed", { error });
+  }
   return undefined;
 }

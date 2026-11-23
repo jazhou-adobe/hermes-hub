@@ -11,9 +11,18 @@ function baseName(comm: string): string {
   return comm.split("/").pop() ?? comm;
 }
 
+/** `ps` output, or "" where a sandbox forbids spawning it (Codex's seatbelt does): detection then works without ancestry. */
+function ps(args: string[]): string {
+  try {
+    return Bun.spawnSync(["ps", ...args], { stderr: "ignore" }).stdout.toString();
+  } catch {
+    return "";
+  }
+}
+
 /** `ps`'s whole table, pid -> {ppid, comm}. `comm` may itself contain spaces (an app bundle path). */
 export function processTable(): Map<number, ProcEntry> {
-  const out = Bun.spawnSync(["ps", "-axo", "pid=,ppid=,comm="]).stdout.toString();
+  const out = ps(["-axo", "pid=,ppid=,comm="]);
   const table = new Map<number, ProcEntry>();
   for (const line of out.split("\n")) {
     const m = /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line);
@@ -50,6 +59,6 @@ export function depthOf(chain: ProcEntry[], pid: number | undefined): number {
 
 /** A process's start time (for the fallback session key: a reused pid is a different session). */
 export function startTime(pid: number): string | null {
-  const out = Bun.spawnSync(["ps", "-o", "lstart=", "-p", String(pid)]).stdout.toString().trim();
+  const out = ps(["-o", "lstart=", "-p", String(pid)]).trim();
   return out || null;
 }

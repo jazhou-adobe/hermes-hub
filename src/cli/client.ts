@@ -9,6 +9,14 @@ export function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+/** `hub_unavailable` (transports spec): the message sends the Agent to the Skill's sandbox advice, `hermes doctor`. */
+function hubUnavailable(baseUrl: string): HubError {
+  return new HubError(
+    "hub_unavailable",
+    `cannot reach the Hub at ${baseUrl}. Ask the Human to start it with \`hermes hub\`; from a sandbox, ask them to run \`hermes doctor\` for the setting that lets hermes reach it`,
+  );
+}
+
 /** The Agent side of the HTTP API. Every failure surfaces as a HubError carrying the shared code. */
 export class HubClient {
   private token: string | undefined;
@@ -32,10 +40,7 @@ export class HubClient {
       });
     } catch (err) {
       if (signal?.aborted) throw err;
-      throw new HubError(
-        "hub_unavailable",
-        `cannot reach the Hub at ${this.baseUrl}. Start it with \`hermes hub\`; a sandboxed Agent needs the Hub Skill's sandbox setup`,
-      );
+      throw hubUnavailable(this.baseUrl);
     }
     if (!res.ok) throw await this.toHubError(res);
     let data: unknown;
@@ -67,6 +72,12 @@ export class HubClient {
     const res = await this.request("POST", "/v1/sessions", session);
     if (typeof res.token !== "string") throw new HubError("internal", "session response without a token");
     this.token = res.token;
+  }
+
+  /** `GET /v1/hub`: the Hub's version (it also lists the schemas and limits). */
+  async hubVersion(): Promise<string> {
+    const res = await this.request("GET", "/v1/hub");
+    return typeof res.version === "string" ? res.version : "unknown";
   }
 
   async submit(round: unknown, supersedes?: string): Promise<{ round_id: string; url: string }> {
@@ -138,10 +149,7 @@ export class HubClient {
         signal,
       });
     } catch {
-      throw new HubError(
-        "hub_unavailable",
-        `cannot reach the Hub at ${this.baseUrl}. Start it with \`hermes hub\`; a sandboxed Agent needs the Hub Skill's sandbox setup`,
-      );
+      throw hubUnavailable(this.baseUrl);
     }
     if (!res.ok) throw await this.toHubError(res);
     if (!res.body) throw new HubError("internal", "the Hub sent /v1/events without a body");
