@@ -33,7 +33,7 @@ Two files in this folder are **not** in the manifest and are written here:
 
 1. **Bun HTML import instead of Next.js.** The Command Center is a Bun-bundled React SPA (`docs/specs/frontend-stack.md`), so there is no `app/layout.tsx`, `app/fonts.ts` or `next build`. The theme attribute goes straight on `<html>`.
 2. **Self-hosted fonts with recorded sources instead of `next/font`.** `fonts.css` declares the `@font-face` rules and sets the six `--font-*` variables the tokens reference, to the family names. Sources below.
-3. **Tailwind not used in the preview.** `tokens/tailwind-theme.css` is copied but not imported by `web/preview/`; layout glue there is plain CSS on `--hh-*` tokens. The app's own import order (frontend-stack spec) adds Tailwind 4 first.
+3. **No Tailwind.** `tokens/tailwind-theme.css` is copied but imported by neither `web/preview/` nor the app; layout glue is plain CSS on `--hh-*` tokens (`web/preview/preview.css`, ported to `web/src/app.css`).
 4. **No world CSS inlining.** The world stylesheet is imported unlayered, as the adoption skill describes (the master inlines it from `app/layout.tsx` only for `next dev`).
 
 ## CSS import order
@@ -44,7 +44,7 @@ Two files in this folder are **not** in the manifest and are written here:
 4. `base.css` (the base layer)
 5. `fonts.css`
 
-(The Tailwind imports from the skill's list come first in an app that uses them.)
+The app (`web/src/app.css`) keeps this cascade but declares `@layer components, base;` first and imports `base.css` and `fonts.css` before the rest, because Bun's test-time bundler fails to resolve a top-level `design-system/` file imported after one from a subfolder. The layer statement keeps the order identical. Bun inlines the woff2 files as data: URLs, so the Hub's CSP allows `font-src data:`.
 
 ## Fonts
 

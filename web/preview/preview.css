@@ -51,7 +51,6 @@
   flex-direction: column;
   gap: var(--hh-density-gap);
   min-width: 0;
-  max-width: var(--hh-layout-content-max);
 }
 
 .pv-main:focus {

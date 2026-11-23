@@ -1,21 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { Agents } from "./agents/Agents.tsx";
-import { Feed } from "./feed/Feed.tsx";
-import { Log } from "./log/Log.tsx";
-import { Nav } from "./nav.tsx";
-import { usePath } from "./router.ts";
+import { App } from "./shell.tsx";
 import { connect } from "./store.ts";
-
-function App() {
-  const path = usePath();
-  return (
-    <>
-      <Nav />
-      {path === "/agents" ? <Agents /> : path === "/log" ? <Log /> : <Feed />}
-    </>
-  );
-}
 
 connect();
 

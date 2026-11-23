@@ -1,586 +1,371 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { FeedRoundView } from "../../../src/hub/engine.ts";
-import type { Answer, Outcome, Question, QuestionValue } from "../../../src/schema/types.ts";
-import type { Draft } from "../../../src/schema/validate.ts";
-import { advisorNames, askAdvisor, cancelAdvisor, dismissRound, redirectRound, removeFromFeed, saveDraft, sendRound } from "../api.ts";
-import { useStore } from "../store.ts";
+import type { Answer } from "../../../src/schema/types.ts";
+import { countdown, hhmm, LOCK_SOON_MS, nextDeadline, OUTCOME_WORDS, plural, projectLabel } from "../format.ts";
+import { Icon } from "../icons.tsx";
+import { linkClick } from "../router.ts";
+import { clearJump, reconnectNow, useNow, useStore } from "../store.ts";
+import { isTextField, KeyList } from "../keys.tsx";
+import { Callsign, EndedRound, PendingRound, type RoundHandle } from "./Round.tsx";
 
-const DRAFT_DEBOUNCE_MS = 500;
+interface Filters {
+  callsigns: Set<string>;
+  projects: Set<string>;
+}
 
-const OUTCOME_SENTENCE: Record<Outcome, string> = {
-  answered: "Answered",
-  dismissed: "Dismissed",
-  redirected: "Redirected",
-  expired: "Expired: its last open Question locked",
-  cancelled: "Cancelled",
-};
+/** Scrolls a Round into view and focuses its heading. */
+function focusRound(id: string): void {
+  const li = document.getElementById(id);
+  if (!li) return;
+  li.scrollIntoView({ block: "start" });
+  li.querySelector<HTMLElement>(".hh-strip-header")?.focus({ preventScroll: true });
+}
 
-/** Bare functional Feed (S2 scope); the designed Feed replaces it in S4. */
-export function Feed() {
-  const rounds = useStore((s) => s.rounds);
-  const connection = useStore((s) => s.connection);
-  const [advisors, setAdvisors] = useState<string[]>([]);
+/** The Round in view: the first one crossing a band near the top of the viewport (preview.js). */
+function useInView(ids: string[], listRef: RefObject<HTMLOListElement | null>): [string | null, (id: string) => void] {
+  const [inView, setInView] = useState<string | null>(null);
+  const visible = useRef(new Set<string>());
+  const observer = useRef<IntersectionObserver | null>(null);
+  const order = useRef(ids);
+  order.current = ids;
+
   useEffect(() => {
-    void advisorNames()
-      .then(setAdvisors)
-      .catch(() => {});
+    observer.current = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) (e.isIntersecting ? visible.current.add(e.target.id) : visible.current.delete(e.target.id));
+        const first = order.current.find((id) => visible.current.has(id));
+        if (first) setInView(first);
+      },
+      { rootMargin: "-30% 0px -65% 0px" },
+    );
+    return () => observer.current?.disconnect();
   }, []);
-  return (
-    <main>
-      <header className="bar">
-        <h1>Hermes Hub</h1>
-        <span className={`status status-${connection}`} role="status">
-          {connection}
-        </span>
-      </header>
-      {rounds.length === 0 ? <p className="empty">No pending Rounds.</p> : null}
-      {rounds.map((view) => (
-        <RoundCard key={view.id} view={view} advisors={advisors} />
-      ))}
-    </main>
-  );
-}
 
-function RoundCard({ view, advisors }: { view: FeedRoundView; advisors: string[] }) {
-  return view.status === "pending" ? <PendingCard view={view} advisors={advisors} /> : <EndedCard view={view} />;
-}
-
-function EndedCard({ view }: { view: FeedRoundView }) {
-  const [removing, setRemoving] = useState(false);
-  const answer = view.answer as Answer;
-  const lastRun = view.advisor_runs[0];
-  return (
-    <section className="round ended" aria-labelledby={`round-${view.id}-title`}>
-      <h2 id={`round-${view.id}-title`}>{view.round.title}</h2>
-      <p className="meta">
-        {view.session.callsign} · {OUTCOME_SENTENCE[view.status as Outcome]}
-        {answer.superseded_by ? (
-          <>
-            {" "}
-            · Replaced by <a href={`/rounds/${answer.superseded_by}`}>{answer.superseded_by}</a>
-          </>
-        ) : null}
-      </p>
-      {lastRun ? (
-        <p className="advisor-history">
-          Advisor: {lastRun.advisor_name} ({lastRun.status})
-        </p>
-      ) : null}
-      {view.draft ? (
-        <p className="draft-kept">
-          Not sent
-          <button type="button" onClick={() => void navigator.clipboard.writeText(JSON.stringify(view.draft))}>
-            Copy draft
-          </button>
-        </p>
-      ) : null}
-      <button type="button" disabled={removing} onClick={() => (setRemoving(true), removeFromFeed(view.id))}>
-        Remove from feed
-      </button>
-    </section>
-  );
-}
-
-function PendingCard({ view, advisors }: { view: FeedRoundView; advisors: string[] }) {
-  const { round, locks } = view;
-  const draft = view.draft;
-  const suggestion = view.suggestion;
-  const [values, setValues] = useState<Record<string, unknown>>(() => draftValues(draft));
-  const [note, setNote] = useState(draft?.note ?? "");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [showRedirect, setShowRedirect] = useState(false);
-  const [redirectMessage, setRedirectMessage] = useState(draft?.message ?? "");
-  const [suggestedFilled, setSuggestedFilled] = useState<Set<string>>(new Set());
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const mergedRunRef = useRef<string | undefined>(undefined);
-
-  useEffect(() => () => clearTimeout(debounceRef.current), []);
-
-  // Delegation (Advisors): once a run ends with a valid Suggestion, fill still-empty, open Questions.
-  const latestRun = view.advisor_runs[0];
+  const key = ids.join(" ");
   useEffect(() => {
-    if (!latestRun || latestRun.status === "running" || !latestRun.suggestion) return;
-    if (mergedRunRef.current === latestRun.id) return;
-    mergedRunRef.current = latestRun.id;
-    const filled = new Set<string>();
-    setValues((prev) => {
-      const next = { ...prev };
-      for (const [qid, s] of Object.entries(latestRun.suggestion!.questions)) {
-        if (locks[qid]) continue;
-        const q = round.questions.find((x) => x.id === qid);
-        if (!q || isAnswered(q, next[qid])) continue;
-        next[qid] = s.value;
-        filled.add(qid);
-      }
-      return filled.size ? next : prev;
-    });
-    if (filled.size) setSuggestedFilled((prev) => new Set([...prev, ...filled]));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [latestRun?.id, latestRun?.status]);
+    const o = observer.current;
+    if (!o || !listRef.current) return;
+    const items = [...listRef.current.querySelectorAll<HTMLElement>(":scope > .pv-feed-item")];
+    for (const item of items) o.observe(item);
+    return () => {
+      for (const item of items) o.unobserve(item);
+    };
+  }, [key, listRef]);
 
-  function scheduleDraftSave(nextValues: Record<string, unknown>, nextNote: string, nextMessage: string) {
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      const questions = Object.fromEntries(Object.entries(nextValues).map(([id, value]) => [id, { value }]));
-      void saveDraft(view.id, { questions, ...(nextNote ? { note: nextNote } : {}), ...(nextMessage ? { message: nextMessage } : {}) });
-    }, DRAFT_DEBOUNCE_MS);
-  }
+  const current = inView && ids.includes(inView) ? inView : (ids[0] ?? null);
+  return [current, setInView];
+}
 
-  function setValue(id: string, value: unknown) {
-    const next = { ...values, [id]: value };
-    setValues(next);
-    if (suggestedFilled.has(id)) {
-      setSuggestedFilled((prev) => {
-        const rest = new Set(prev);
-        rest.delete(id);
-        return rest;
-      });
-    }
-    scheduleDraftSave(next, note, redirectMessage);
-  }
+function IndexEntry({ view, inView, offline, now }: { view: FeedRoundView; inView: boolean; offline: boolean; now: number }) {
+  const pending = view.status === "pending";
+  const next = nextDeadline(view);
+  const left = next === null ? null : next - now;
+  const locked = Object.keys(view.locks).length;
+  const answer = view.answer as Answer | null;
+  return (
+    <li className="pv-index-item">
+      <a
+        className="pv-index-link"
+        href={`#${view.id}`}
+        aria-current={inView ? "location" : undefined}
+        onClick={(e) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+          e.preventDefault();
+          focusRound(view.id);
+        }}
+      >
+        <Callsign name={view.session.callsign} />
+        <span className="pv-index-title">{view.round.title}</span>
+        <span className="pv-index-meta">
+          {pending ? (
+            <span className="hh-mono-sm">
+              {left === null ? "No deadline · keeps waiting" : `${countdown(left)} to next Lock`}
+              {offline ? " (estimated) · Stale" : ""}
+            </span>
+          ) : (
+            <>
+              <span className="hh-badge" data-tone="expired">
+                {OUTCOME_WORDS[view.status as Answer["outcome"]]}
+              </span>{" "}
+              <span className="hh-mono-sm">
+                {answer?.superseded_by
+                  ? `Replaced by ${answer.superseded_by}`
+                  : answer?.cancelled_by === "human"
+                    ? `Cancelled by Forget · ${hhmm(answer.decided_at)}`
+                    : answer
+                      ? `${OUTCOME_WORDS[answer.outcome]} ${hhmm(answer.decided_at)}`
+                      : ""}
+              </span>
+            </>
+          )}
+          {pending && locked > 0 ? (
+            <span className="hh-badge">
+              <Icon name="lock" /> {locked} of {view.round.questions.length} locked
+            </span>
+          ) : null}
+          {pending && view.round.supersedes ? (
+            <span className="hh-badge" data-tone="info">
+              <Icon name="refresh" /> Replaces {view.round.supersedes}
+            </span>
+          ) : null}
+          {pending && left !== null && left < LOCK_SOON_MS ? (
+            <span className="hh-badge" data-tone="warning">
+              <Icon name="clock" /> Lock soon
+            </span>
+          ) : null}
+          <span className="pv-inview">
+            <Icon name="chevron-right" /> In view
+          </span>
+        </span>
+      </a>
+    </li>
+  );
+}
 
-  const openQuestions = round.questions.filter((q) => !locks[q.id]);
-  const ready = openQuestions.every((q) => q.required === false || isAnswered(q, values[q.id]));
-  const nextDeadline = Object.values(view.deadlines).sort()[0];
-  const lockSoon = nextDeadline !== undefined && Date.parse(nextDeadline) - Date.now() < 60_000;
-
-  async function act(fn: () => Promise<void>) {
-    setBusy(true);
-    setError(null);
-    try {
-      await fn();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setBusy(false);
-    }
-  }
-
-  async function onSend(e: FormEvent) {
-    e.preventDefault();
-    await act(() =>
-      sendRound(view.id, {
-        ...(note.trim() ? { note } : {}),
-        questions: Object.fromEntries(openQuestions.map((q) => [q.id, { value: values[q.id] ?? null }])),
-      }),
+function ConnectionAlert() {
+  const connection = useStore((s) => s.connection);
+  const retryIn = useStore((s) => s.retryIn);
+  const lastUpdate = useStore((s) => s.lastUpdate);
+  if (connection === "reconnecting") {
+    return (
+      <div className="hh-alert" data-tone="warning" role="status">
+        <span className="hh-badge" data-tone="warning">
+          <Icon name="refresh" /> Reconnecting
+        </span>
+        <strong>The Feed may be out of date</strong>
+        <div className="hh-body-sm">
+          {retryIn !== null ? `Retry in ${retryIn} s. ` : ""}Rounds stay on screen and Send is still attempted.{" "}
+          <button type="button" className="hh-button" data-size="sm" onClick={reconnectNow}>
+            <Icon name="refresh" /> Reconnect now
+          </button>
+        </div>
+      </div>
     );
   }
-
-  const titleId = `round-${view.id}-title`;
-  return (
-    <form className={`round${lockSoon ? " lock-soon" : ""}`} id={`round-${view.id}`} aria-labelledby={titleId} onSubmit={onSend}>
-      <h2 id={titleId}>{round.title}</h2>
-      <p className="meta">
-        {view.session.callsign} · {new Date(view.received_at).toLocaleTimeString()}
-        {lockSoon ? <strong className="lock-soon-badge"> · Lock soon</strong> : null}
-      </p>
-      {round.context ? <p className="context">{round.context}</p> : null}
-      {round.links?.length ? (
-        <ul className="links">
-          {round.links.map((l) => (
-            <li key={l.url}>
-              <a href={l.url}>{l.label ?? l.url}</a>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      <AdvisorSection view={view} advisors={advisors} />
-
-      {round.questions.map((q) => {
-        const lock = locks[q.id];
-        const deadline = view.deadlines[q.id];
-        const suggested = suggestion?.questions[q.id];
-        return (
-          <QuestionField
-            key={q.id}
-            question={q}
-            locked={lock ? { at: lock.locked_at } : undefined}
-            lockDeadline={deadline}
-            value={values[q.id]}
-            onChange={(value) => setValue(q.id, value)}
-            suggestion={suggested ? { advisor: suggestion!.advisor, value: suggested.value, rationale: suggested.rationale } : undefined}
-            autoFilled={suggestedFilled.has(q.id)}
-          />
-        );
-      })}
-
-      <label className="note">
-        Note (optional)
-        <textarea
-          value={note}
-          onChange={(e) => {
-            setNote(e.target.value);
-            scheduleDraftSave(values, e.target.value, redirectMessage);
-          }}
-          rows={2}
-        />
-      </label>
-
-      {showRedirect ? (
-        <label className="redirect">
-          Do this instead
-          <input
-            type="text"
-            required
-            value={redirectMessage}
-            onChange={(e) => {
-              setRedirectMessage(e.target.value);
-              scheduleDraftSave(values, note, e.target.value);
-            }}
-          />
-        </label>
-      ) : null}
-
-      {error ? <p role="alert">{error}</p> : null}
-
-      <div className="actions">
-        <button type="submit" disabled={!ready || busy}>
-          Send
-        </button>
-        <button type="button" disabled={busy} onClick={() => act(() => dismissRound(view.id, note.trim() ? { note } : {}))}>
-          Dismiss
-        </button>
-        {showRedirect ? (
-          <button
-            type="button"
-            disabled={busy || !redirectMessage.trim()}
-            onClick={() => act(() => redirectRound(view.id, { message: redirectMessage, ...(note.trim() ? { note } : {}) }))}
-          >
-            Confirm redirect
+  if (connection === "offline") {
+    return (
+      <div className="hh-alert" data-tone="destructive" role="alert">
+        <span className="hh-badge" data-tone="destructive">
+          <Icon name="x" /> Offline
+        </span>
+        <strong>Answers cannot be sent</strong>
+        <div className="hh-body-sm">
+          {lastUpdate ? `Last update ${hhmm(lastUpdate)}. ` : ""}Drafts stay on this page. Index entries show Stale and timers say estimated.{" "}
+          <button type="button" className="hh-button" data-size="sm" onClick={reconnectNow}>
+            <Icon name="refresh" /> Reconnect now
           </button>
-        ) : (
-          <button type="button" disabled={busy} onClick={() => setShowRedirect(true)}>
-            Redirect
-          </button>
-        )}
+        </div>
       </div>
-    </form>
-  );
+    );
+  }
+  return null;
 }
 
-/** Ask advisor / cancel / "Advisor working · m:ss" / unparsed briefing (delegation spec). */
-function AdvisorSection({ view, advisors }: { view: FeedRoundView; advisors: string[] }) {
-  const run = view.advisor_runs[0];
-  const running = run?.status === "running";
-  const [advisor, setAdvisor] = useState(advisors[0] ?? "");
-  const [brief, setBrief] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+export function Feed() {
+  const rounds = useStore((s) => s.rounds);
+  const loaded = useStore((s) => s.loaded);
+  const advisors = useStore((s) => s.advisors);
+  const connection = useStore((s) => s.connection);
+  const shortcuts = useStore((s) => s.settings.shortcuts);
+  const jumpTo = useStore((s) => s.jumpTo);
+  const now = useNow();
+  const offline = connection === "offline";
+  const [filters, setFilters] = useState<Filters>({ callsigns: new Set(), projects: new Set() });
+  const handles = useRef(new Map<string, RoundHandle>());
+  const listRef = useRef<HTMLOListElement>(null);
+
+  const callsigns = useMemo(() => [...new Set(rounds.map((r) => r.session.callsign))].sort(), [rounds]);
+  const projects = useMemo(() => [...new Set(rounds.map((r) => r.session.project).filter((p): p is string => p !== null))].sort(), [rounds]);
+  const filtering = filters.callsigns.size > 0 || filters.projects.size > 0;
+  // Chips OR inside one kind and AND across kinds (preview.js).
+  const shown = rounds.filter(
+    (r) =>
+      (filters.callsigns.size === 0 || filters.callsigns.has(r.session.callsign)) &&
+      (filters.projects.size === 0 || (r.session.project !== null && filters.projects.has(r.session.project))),
+  );
+  const ids = shown.map((r) => r.id);
+  const [inView, setInView] = useInView(ids, listRef);
+  const pendingCount = rounds.filter((r) => r.status === "pending").length;
+
+  function toggle(kind: keyof Filters, value: string) {
+    setFilters((f) => {
+      const next = new Set(f[kind]);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return { ...f, [kind]: next };
+    });
+  }
+
+  /** After Send, Dismiss or Redirect: scroll to the next Pending Round and focus it (command-center spec). */
+  const advance = useCallback(
+    (doneId: string) => {
+      const at = shown.findIndex((r) => r.id === doneId);
+      const after = shown.slice(at + 1).find((r) => r.status === "pending" && r.id !== doneId);
+      const before = [...shown.slice(0, Math.max(0, at))].reverse().find((r) => r.status === "pending");
+      const next = after ?? before;
+      requestAnimationFrame(() => {
+        if (next) {
+          setInView(next.id);
+          focusRound(next.id);
+        } else {
+          document.getElementById("feed-h")?.focus();
+        }
+      });
+    },
+    [shown, setInView],
+  );
 
   useEffect(() => {
-    if (!advisor && advisors.length) setAdvisor(advisors[0]!);
-  }, [advisors, advisor]);
+    if (!jumpTo || !loaded) return;
+    clearJump();
+    if (!ids.includes(jumpTo)) setFilters({ callsigns: new Set(), projects: new Set() });
+    requestAnimationFrame(() => {
+      setInView(jumpTo);
+      focusRound(jumpTo);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpTo, loaded]);
 
+  // Keys (command-center spec): never inside a text field except ⌘↵; single keys can be switched off.
   useEffect(() => {
-    if (!running || !run) return;
-    const startedAt = Date.parse(run.started_at);
-    const tick = () => setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [running, run?.id, run?.started_at]);
-
-  async function start() {
-    if (!advisor) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await askAdvisor(view.id, { advisor, ...(brief.trim() ? { brief } : {}) });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
+    function onKey(e: KeyboardEvent) {
+      if (e.defaultPrevented || document.querySelector("dialog[open]")) return;
+      const target = e.target as HTMLElement;
+      const focusedRound = target.closest?.(".pv-feed-item")?.id;
+      const roundId = focusedRound ?? inView;
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        if (!roundId) return;
+        e.preventDefault();
+        handles.current.get(roundId)?.send();
+        return;
+      }
+      if (!shortcuts || e.metaKey || e.ctrlKey || e.altKey || isTextField(target)) return;
+      const index = inView ? ids.indexOf(inView) : -1;
+      const handle = roundId ? handles.current.get(roundId) : undefined;
+      if (e.key === "j" || e.key === "k") {
+        const next = ids[e.key === "j" ? Math.min(ids.length - 1, index + 1) : Math.max(0, index - 1)];
+        if (!next) return;
+        e.preventDefault();
+        setInView(next);
+        focusRound(next);
+      } else if (/^[1-9]$/.test(e.key) && handle) {
+        e.preventDefault();
+        handle.choose(Number(e.key));
+      } else if ((e.key === "a" || e.key === "r") && handle) {
+        e.preventDefault();
+        handle.decide(e.key === "a" ? "approve" : "reject");
+      } else if (e.key === "n" && handle) {
+        e.preventDefault();
+        handle.openNotes();
+      } else if ((e.key === "d" || e.key === "e" || e.key === "v") && handle) {
+        e.preventDefault();
+        handle.openPanel(e.key === "d" ? "dismiss" : e.key === "e" ? "redirect" : "advisor");
+      }
     }
-  }
-
-  async function cancel() {
-    setBusy(true);
-    setError(null);
-    try {
-      await cancelAdvisor(view.id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!running && advisors.length === 0 && !run) return null;
-  const minutes = Math.floor(elapsedSeconds / 60);
-  const seconds = elapsedSeconds % 60;
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [ids, inView, shortcuts, setInView]);
 
   return (
-    <div className="advisor">
-      {running ? (
-        <p className="advisor-status">
-          Advisor working · {minutes}:{String(seconds).padStart(2, "0")}
-          <button type="button" disabled={busy} onClick={cancel}>
-            Cancel
-          </button>
-        </p>
-      ) : advisors.length > 0 ? (
-        <div className="advisor-ask">
-          <select value={advisor} onChange={(e) => setAdvisor(e.target.value)}>
-            {advisors.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-          <input type="text" placeholder="Brief (optional)" value={brief} onChange={(e) => setBrief(e.target.value)} />
-          <button type="button" disabled={busy || !advisor} onClick={start}>
-            Ask advisor
-          </button>
+    <section className="pv-surface" aria-labelledby="feed-h">
+      <div className="pv-page-head">
+        <h1 className="hh-heading-lg" id="feed-h" tabIndex={-1}>
+          Feed
+        </h1>
+        <span className="hh-mono-sm">
+          {plural(rounds.length, "Round")} in the Feed · {pendingCount} pending · arrival order
+        </span>
+      </div>
+      <ConnectionAlert />
+      {!loaded ? (
+        <div aria-busy="true" className="hh-stack">
+          <p className="hh-body-sm">Loading Rounds…</p>
+          <span className="hh-skeleton pv-skel"></span>
+          <span className="hh-skeleton pv-skel"></span>
         </div>
-      ) : null}
-      {run && run.status === "failed" && !run.suggestion ? (
-        <div className="advisor-unparsed">
-          <p>Unparsed briefing from {run.advisor_name}:</p>
-          <pre>{run.raw_output}</pre>
+      ) : rounds.length === 0 ? (
+        <div className="hh-strip-bay-empty">
+          <div className="hh-empty-state">
+            <p className="hh-heading-md">No pending Rounds.</p>
+            <p className="hh-body-sm">Agents ask through the Hub Skill.</p>
+            <a className="hh-link" href="/log" onClick={linkClick("/log")}>
+              Open answered log
+            </a>
+          </div>
         </div>
-      ) : null}
-      {error ? <p role="alert">{error}</p> : null}
-    </div>
-  );
-}
-
-function draftValues(draft: Draft | null): Record<string, unknown> {
-  if (!draft?.questions) return {};
-  return Object.fromEntries(Object.entries(draft.questions).map(([id, q]) => [id, q.value]));
-}
-
-function isAnswered(_q: Question, value: unknown): boolean {
-  if (value == null || typeof value !== "object") return false;
-  if ("other" in value) return typeof value.other === "string" && value.other.trim() !== "";
-  if ("text" in value) return typeof value.text === "string" && value.text.trim() !== "";
-  if ("selected" in value) return Array.isArray(value.selected) ? value.selected.length > 0 : typeof value.selected === "string";
-  if ("decision" in value) return value.decision === "approve" || value.decision === "reject";
-  return false;
-}
-
-function sameValue(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
-/** A short, human-readable rendering of a Suggestion's value, for the inline "ADVISOR suggests …" line. */
-function describeSuggestedValue(q: Question, value: QuestionValue): string {
-  if (value === null) return "nothing";
-  if ("selected" in value) {
-    const ids = Array.isArray(value.selected) ? value.selected : [value.selected];
-    const labels = q.kind === "single" || q.kind === "multi" ? ids.map((id) => q.options.find((o) => o.id === id)?.label ?? id) : ids;
-    return labels.join(", ");
-  }
-  if ("other" in value) return value.other;
-  if ("text" in value) return value.text.length > 60 ? `${value.text.slice(0, 60)}…` : value.text;
-  if ("decision" in value) return value.decision;
-  return "";
-}
-
-function lockedSentence(lock: { at: string }, recommended: boolean): string {
-  const time = new Date(lock.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  return `Policy ${recommended ? "applied recommended" : "cancelled"} · ${time}`;
-}
-
-function QuestionField(props: {
-  question: Question;
-  locked?: { at: string };
-  lockDeadline?: string;
-  value: unknown;
-  onChange: (value: unknown) => void;
-  /** This Question's current Suggestion, if any (delegation spec). */
-  suggestion?: { advisor: string; value: QuestionValue; rationale?: string };
-  /** Set while this Question's value was filled by the merge and not yet touched by the Human. */
-  autoFilled: boolean;
-}) {
-  const { question: q, locked, value, onChange, suggestion, autoFilled } = props;
-  const disabled = locked !== undefined;
-  const showAccept = !disabled && !autoFilled && suggestion !== undefined && isAnswered(q, value) && !sameValue(value, suggestion.value);
-  return (
-    <fieldset disabled={disabled} className={disabled ? "locked" : undefined}>
-      <legend>
-        {q.prompt}
-        {q.required === false ? " (optional)" : ""}
-      </legend>
-      {q.detail ? <p className="detail">{q.detail}</p> : null}
-      {locked ? <p className="lock-note">{lockedSentence(locked, hasApplyRecommendedLock(q, value))}</p> : null}
-      {!disabled && autoFilled && suggestion ? (
-        <p className="suggested-note">
-          Suggested by {suggestion.advisor}
-          {suggestion.rationale ? ` — ${suggestion.rationale}` : ""}
-        </p>
-      ) : null}
-      {showAccept ? (
-        <p className="suggested-accept">
-          {suggestion!.advisor} suggests {describeSuggestedValue(q, suggestion!.value)}
-          {suggestion!.rationale ? ` (${suggestion!.rationale})` : ""}
-          <button type="button" onClick={() => onChange(suggestion!.value)}>
-            Accept
-          </button>
-        </p>
-      ) : null}
-      {q.kind === "single" || q.kind === "multi" ? (
-        <ChoiceOptions question={q} value={value} onChange={onChange} />
-      ) : q.kind === "text" ? (
-        <TextAnswer question={q} value={value} onChange={onChange} />
       ) : (
-        <ApproveAnswer question={q} value={value} onChange={onChange} />
-      )}
-    </fieldset>
-  );
-}
-
-function hasApplyRecommendedLock(_q: Question, value: unknown): boolean {
-  return value !== null;
-}
-
-function ChoiceOptions({
-  question: q,
-  value,
-  onChange,
-}: {
-  question: Extract<Question, { kind: "single" | "multi" }>;
-  value: unknown;
-  onChange: (value: unknown) => void;
-}) {
-  const v = (value ?? {}) as { selected?: string | string[]; other?: string };
-  const selected = new Set(Array.isArray(v.selected) ? v.selected : v.selected ? [v.selected] : []);
-  const other = typeof v.other === "string" ? v.other : null;
-  const multi = q.kind === "multi";
-
-  function toggle(id: string) {
-    if (!multi) return onChange({ selected: id });
-    const next = new Set(selected);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    onChange(other !== null ? { selected: [...next], other } : { selected: [...next] });
-  }
-
-  return (
-    <>
-      {q.options.map((o) => (
-        <label key={o.id} className="option">
-          <input type={multi ? "checkbox" : "radio"} checked={selected.has(o.id)} onChange={() => toggle(o.id)} />
-          <span>
-            {o.label}
-            {isRecommended(q, o.id) ? <em className="recommended"> recommended</em> : null}
-            {o.detail ? <small>{o.detail}</small> : null}
-          </span>
-        </label>
-      ))}
-      {q.allow_other ? (
-        <label className="option">
-          <input
-            type={multi ? "checkbox" : "radio"}
-            checked={other !== null}
-            onChange={() => (multi ? onChange({ selected: [...selected], other: other ?? "" }) : onChange({ other: other ?? "" }))}
-          />
-          <span>
-            Other
-            {other !== null ? (
-              <input
-                type="text"
-                aria-label={`Other answer for: ${q.prompt}`}
-                value={other}
-                onChange={(e) => (multi ? onChange({ selected: [...selected], other: e.target.value }) : onChange({ other: e.target.value }))}
-              />
+        <div className="pv-feed-layout">
+          <aside className="pv-index hh-panel" data-density="compact" aria-labelledby="index-h">
+            <div className="pv-index-head">
+              <h2 className="hh-heading-md" id="index-h">
+                Feed index
+              </h2>
+              <span className="hh-mono-sm" role="status">
+                {filtering && shown.length === 0 ? "No Rounds match · Clear filters" : `Showing ${shown.length} of ${rounds.length}`}
+              </span>
+            </div>
+            <div role="group" aria-label="Filter by callsign" className="hh-row pv-chips">
+              {callsigns.map((c) => (
+                <button key={c} type="button" className="hh-chip" aria-pressed={filters.callsigns.has(c)} onClick={() => toggle("callsigns", c)}>
+                  <Callsign name={c} />
+                </button>
+              ))}
+            </div>
+            {projects.length > 0 ? (
+              <div role="group" aria-label="Filter by project" className="hh-row pv-chips">
+                {projects.map((p) => (
+                  <button key={p} type="button" className="hh-chip" aria-pressed={filters.projects.has(p)} onClick={() => toggle("projects", p)} title={p}>
+                    {projectLabel(p)}
+                  </button>
+                ))}
+              </div>
             ) : null}
-          </span>
-        </label>
-      ) : null}
-    </>
-  );
-}
-
-function isRecommended(q: Extract<Question, { kind: "single" | "multi" }>, id: string): boolean {
-  return q.kind === "single" ? q.recommended === id : (q.recommended ?? []).includes(id);
-}
-
-function TextAnswer({
-  question: q,
-  value,
-  onChange,
-}: {
-  question: Extract<Question, { kind: "text" }>;
-  value: unknown;
-  onChange: (value: unknown) => void;
-}) {
-  const text = value && typeof value === "object" && "text" in value && typeof value.text === "string" ? value.text : "";
-  const common = {
-    value: text,
-    placeholder: q.placeholder,
-    maxLength: q.max_length ?? 10000,
-    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange({ text: e.target.value }),
-  };
-  return (
-    <>
-      {q.recommended ? (
-        <p className="recommended-text">
-          Suggested: "{q.recommended}"
-          <button type="button" onClick={() => onChange({ text: q.recommended! })}>
-            Use it
-          </button>
-        </p>
-      ) : null}
-      {q.multiline === false ? <input type="text" {...common} /> : <textarea rows={3} {...common} />}
-    </>
-  );
-}
-
-function ApproveAnswer({
-  question: q,
-  value,
-  onChange,
-}: {
-  question: Extract<Question, { kind: "approve" }>;
-  value: unknown;
-  onChange: (value: unknown) => void;
-}) {
-  const v = (value ?? {}) as { decision?: "approve" | "reject"; edited?: boolean; proposal?: unknown };
-  const proposal = q.proposal;
-  const editedValue = v.edited && "proposal" in v ? v.proposal : (proposal?.value ?? "");
-  return (
-    <div className="approve">
-      {proposal ? (
-        <div className="proposal">
-          {proposal.editable ? (
-            <textarea
-              rows={3}
-              value={typeof editedValue === "string" ? editedValue : JSON.stringify(editedValue)}
-              onChange={(e) => onChange({ decision: v.decision ?? "approve", edited: true, proposal: e.target.value })}
-            />
-          ) : (
-            <pre>{typeof proposal.value === "string" ? proposal.value : JSON.stringify(proposal.value, null, 2)}</pre>
-          )}
-          {v.edited ? (
-            <p>
-              Edited{" "}
-              <button type="button" onClick={() => onChange(v.decision ? { decision: v.decision, edited: false } : null)}>
-                Reset
-              </button>
-            </p>
-          ) : null}
+            {filtering ? (
+              <div className="hh-row">
+                <button
+                  type="button"
+                  className="hh-button"
+                  data-variant="ghost"
+                  data-size="sm"
+                  onClick={() => setFilters({ callsigns: new Set(), projects: new Set() })}
+                >
+                  Clear filters
+                </button>
+              </div>
+            ) : null}
+            <nav aria-label="Feed index">
+              <ul className="pv-index-list">
+                {shown.map((r) => (
+                  <IndexEntry key={r.id} view={r} inView={r.id === inView} offline={offline} now={now} />
+                ))}
+              </ul>
+            </nav>
+            {shortcuts ? <KeyList /> : null}
+          </aside>
+          <div className="pv-feed-column">
+            <ol className="pv-feed-list" aria-label="Rounds in the Feed" ref={listRef}>
+              {shown.map((r) =>
+                r.status === "pending" ? (
+                  <PendingRound
+                    key={r.id}
+                    view={r}
+                    advisors={advisors}
+                    inView={r.id === inView}
+                    offline={offline}
+                    onDone={advance}
+                    handle={(h) => {
+                      if (h) handles.current.set(r.id, h);
+                      else handles.current.delete(r.id);
+                    }}
+                  />
+                ) : (
+                  <EndedRound key={r.id} view={r} />
+                ),
+              )}
+            </ol>
+          </div>
         </div>
-      ) : null}
-      <div className="approve-buttons">
-        <button
-          type="button"
-          aria-pressed={v.decision === "approve"}
-          onClick={() => onChange(v.edited ? { decision: "approve", edited: true, proposal: editedValue } : { decision: "approve", edited: false })}
-        >
-          {q.approve_label ?? "Approve"}
-          {q.recommended === "approve" ? <em className="recommended"> recommended</em> : null}
-        </button>
-        <button
-          type="button"
-          aria-pressed={v.decision === "reject"}
-          onClick={() => onChange({ decision: "reject", edited: false })}
-        >
-          {q.reject_label ?? "Reject"}
-          {q.recommended === "reject" ? <em className="recommended"> recommended</em> : null}
-        </button>
-      </div>
-    </div>
+      )}
+    </section>
   );
 }

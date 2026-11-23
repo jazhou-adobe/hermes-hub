@@ -40,3 +40,10 @@ Legend: **Reused** = already specified and used as is. **Composed** = built here
 - **Big Shoulders is not rendered by the flight-director world** (it sets the condensed role to Michroma), but the manifest ships it for the core themes. The preview loads it only if you switch Appearance to Dark or Light.
 - **Icons:** no copy, image, markdown, trash or lock-open icons in the set; `file` and `x` stand in.
 - **Glyph `▸`** (brief and spec: "▸ In view") is outside the latin subset and banned as an icon by the contract; replaced by an SVG chevron plus words.
+
+## Found while building the React Feed (S4)
+
+- **Full width.** The Human asked for the Command Center to use the whole screen: `.pv-main` no longer takes `max-width: var(--hh-layout-content-max)` (removed from `preview.css` too). Only `--hh-layout-measure` caps line length (prose, Question text, the search input). The Feed blueprint should say the shell, Feed column and tables span the viewport beside the side nav and Feed index.
+- **Toast placement.** The preview shows toasts inline in the Feed's `.hh-bay-status` region above the column. Live, a toast appearing or being dismissed there shifts every Round below it, which breaks "a new Round never moves scroll". The build uses `.hh-toast-region` (fixed, out of flow) moved under the app bar with glue `.pv-toasts { top: var(--pv-top); bottom: auto }`, because the design's bottom-end placement covers the sticky Answer bar. The announcement goes to a separate polite live region. Master should add a Command Center toast placement that neither shifts the Feed nor covers the Answer bar.
+- **Focusable headings.** After Send, `j`/`k` and index clicks, focus moves to the Round's `.hh-strip-header` (`tabindex="-1"`). The design has no focus rule for programmatically focused headings; glue keeps the ring for `:focus-visible` only.
+- **Feed index on narrow screens.** Below 64rem the index sits above the Feed, so each new entry would push the Rounds down. Glue caps `.pv-index-list` at three strip heights with its own scroll there.

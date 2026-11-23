@@ -5,10 +5,12 @@ import { CLONE_ROOT } from "../paths.ts";
 import type { Answer, Outcome } from "../schema/types.ts";
 import type { Engine, HubEvent, LogFilter } from "./engine.ts";
 import { noopLogger, type Logger } from "./log.ts";
+import type { Notifier } from "./notify.ts";
 import devCommandCenter from "../../web/index.html";
 
 export const HEARTBEAT_MS = 15_000;
-const CSP = "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'";
+/** `font-src data:`: Bun's CSS bundler inlines url() assets under 128 KiB (every self-hosted font) as data: URLs. */
+const CSP = "default-src 'self'; img-src 'self' data:; font-src 'self' data:; frame-ancestors 'none'; base-uri 'none'";
 const JSON_TYPE = /^application\/json\s*(;|$)/i;
 
 function problem(err: HubError): Response {
@@ -129,7 +131,13 @@ function parseLogFilter(url: URL): LogFilter {
   return filter;
 }
 
-export async function startServer(engine: Engine, port: number, logger: Logger = noopLogger): Promise<Server<undefined>> {
+export async function startServer(
+  engine: Engine,
+  port: number,
+  logger: Logger = noopLogger,
+  /** The macOS fallback (hub-operations spec); it needs to know whether a Command Center tab is open. */
+  notifier?: Notifier,
+): Promise<Server<undefined>> {
   const session = (req: Request) => engine.sessionFor(req.headers.get("Hermes-Session"));
   const development = process.env.NODE_ENV === "development";
 
@@ -160,7 +168,13 @@ export async function startServer(engine: Engine, port: number, logger: Logger =
     // Bun's HTML import with hot reload; it resolves bundled asset URLs against the cwd.
     // The guard and CSP do not cover these UI routes in development.
     process.chdir(CLONE_ROOT);
-    ui = { "/": devCommandCenter, "/rounds/:id": devCommandCenter, "/log": devCommandCenter, "/agents": devCommandCenter };
+    ui = {
+      "/": devCommandCenter,
+      "/rounds/:id": devCommandCenter,
+      "/log": devCommandCenter,
+      "/agents": devCommandCenter,
+      "/settings": devCommandCenter,
+    };
   } else {
     const { index, assets } = await buildCommandCenter();
     const page = handle(() => new Response(index, { headers: { "Content-Type": index.type, "Content-Security-Policy": CSP } }));
@@ -169,6 +183,7 @@ export async function startServer(engine: Engine, port: number, logger: Logger =
       "/rounds/:id": { GET: page },
       "/log": { GET: page },
       "/agents": { GET: page },
+      "/settings": { GET: page },
       "/assets/:file": {
         GET: handle<"/assets/:file">((req) => {
           const asset = assets.get(req.params.file);
@@ -254,6 +269,7 @@ export async function startServer(engine: Engine, port: number, logger: Logger =
 
       // Command Center endpoints (internal; never documented to Agents)
       "/cc/rounds": { GET: handle(() => Response.json({ rounds: engine.feed() })) },
+      "/cc/rounds/:id": { GET: handle<"/cc/rounds/:id">((req) => Response.json(engine.roundDetail(req.params.id))) },
       "/cc/rounds/:id/draft": {
         PUT: handle<"/cc/rounds/:id/draft">(async (req) => {
           engine.saveDraft(req.params.id, await jsonBody(req, "invalid_answer"));
@@ -288,7 +304,36 @@ export async function startServer(engine: Engine, port: number, logger: Logger =
           return Response.json({ ok: true });
         }),
       },
-      "/cc/advisors": { GET: handle(() => Response.json({ advisors: engine.advisorNames() })) },
+      "/cc/settings": {
+        GET: handle(() => Response.json(engine.settings())),
+        PUT: handle(async (req) => Response.json(engine.updateSettings(await jsonBody(req, "invalid_settings")))),
+      },
+      "/cc/config": {
+        GET: handle(() => {
+          const { status, config } = engine.configInfo();
+          return Response.json({
+            status,
+            port: config.port,
+            log_level: config.log_level,
+            limits: config.limits,
+            backups: config.backups,
+            advisors: config.advisors,
+            auto_ask: config.autoAsk,
+            storage: engine.storage(),
+            macos_fallback: notifier !== undefined,
+          });
+        }),
+      },
+      "/cc/notifications/permission": {
+        POST: handle(async (req) => {
+          const body = (await jsonBody(req, "invalid_settings")) as { permission?: unknown };
+          if (body.permission !== "granted" && body.permission !== "denied" && body.permission !== "default") {
+            throw new HubError("invalid_settings", "permission must be granted, denied or default");
+          }
+          notifier?.setBrowserPermission(body.permission);
+          return Response.json({ ok: true });
+        }),
+      },
       "/cc/rounds/:id/advisor": {
         POST: handle<"/cc/rounds/:id/advisor">(async (req) => {
           const body = (await jsonBody(req, "invalid_answer")) as { advisor?: unknown; brief?: unknown };
@@ -324,7 +369,12 @@ export async function startServer(engine: Engine, port: number, logger: Logger =
         GET: handle((req, server) =>
           sse(req, server, (send) => {
             send("hello", { server_time: new Date().toISOString() });
-            return engine.subscribe((e: HubEvent) => send(e.type, e));
+            const closed = notifier?.clientOpened();
+            const unsubscribe = engine.subscribe((e: HubEvent) => send(e.type, e));
+            return () => {
+              closed?.();
+              unsubscribe();
+            };
           }),
         ),
       },
