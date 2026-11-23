@@ -160,7 +160,7 @@ export async function startServer(engine: Engine, port: number, logger: Logger =
     // Bun's HTML import with hot reload; it resolves bundled asset URLs against the cwd.
     // The guard and CSP do not cover these UI routes in development.
     process.chdir(CLONE_ROOT);
-    ui = { "/": devCommandCenter, "/rounds/:id": devCommandCenter, "/log": devCommandCenter };
+    ui = { "/": devCommandCenter, "/rounds/:id": devCommandCenter, "/log": devCommandCenter, "/agents": devCommandCenter };
   } else {
     const { index, assets } = await buildCommandCenter();
     const page = handle(() => new Response(index, { headers: { "Content-Type": index.type, "Content-Security-Policy": CSP } }));
@@ -168,6 +168,7 @@ export async function startServer(engine: Engine, port: number, logger: Logger =
       "/": { GET: page },
       "/rounds/:id": { GET: page },
       "/log": { GET: page },
+      "/agents": { GET: page },
       "/assets/:file": {
         GET: handle<"/assets/:file">((req) => {
           const asset = assets.get(req.params.file);
@@ -277,6 +278,13 @@ export async function startServer(engine: Engine, port: number, logger: Logger =
       "/cc/rounds/:id/remove": {
         POST: handle<"/cc/rounds/:id/remove">((req) => {
           engine.removeFromFeed(req.params.id);
+          return Response.json({ ok: true });
+        }),
+      },
+      "/cc/agents": { GET: handle(() => Response.json({ agents: engine.roster() })) },
+      "/cc/agents/:id/forget": {
+        POST: handle<"/cc/agents/:id/forget">((req) => {
+          engine.forget(req.params.id);
           return Response.json({ ok: true });
         }),
       },

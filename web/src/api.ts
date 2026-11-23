@@ -1,4 +1,4 @@
-import type { AdvisorRunView, FeedRoundView, LogEntry, LogFilter } from "../../src/hub/engine.ts";
+import type { AdvisorRunView, AgentView, FeedRoundView, LogEntry, LogFilter } from "../../src/hub/engine.ts";
 import type { Draft, DismissInput, RedirectInput, SendInput } from "../../src/schema/validate.ts";
 
 async function problemDetail(res: Response): Promise<string> {
@@ -39,6 +39,14 @@ export async function saveDraft(id: string, draft: Draft): Promise<void> {
   if (!res.ok) throw new Error(await problemDetail(res));
 }
 
+export async function agentRoster(): Promise<AgentView[]> {
+  const res = await fetch("/cc/agents");
+  if (!res.ok) throw new Error(await problemDetail(res));
+  const body: { agents: AgentView[] } = await res.json();
+  return body.agents;
+}
+
+export const forgetAgent = (id: string): Promise<void> => post(`/cc/agents/${encodeURIComponent(id)}/forget`, undefined);
 export async function advisorNames(): Promise<string[]> {
   const res = await fetch("/cc/advisors");
   if (!res.ok) throw new Error(await problemDetail(res));

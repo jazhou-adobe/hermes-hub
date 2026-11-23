@@ -229,3 +229,69 @@ describe("CLI exit codes (transports spec)", () => {
     expect(exitCodeFor(code)).toBe(exit);
   });
 });
+
+describe("Agent roster (agent-identity spec)", () => {
+  test("two Live sessions with the same callsign both get a 4-character suffix", () => {
+    const { engine } = newEngine();
+    engine.upsertSession({ kind: "claude-code", session_key: "k1", label: "api" });
+    engine.upsertSession({ kind: "claude-code", session_key: "k2", label: "api" });
+    const roster = engine.roster();
+    const callsigns = roster.map((a) => a.callsign).sort();
+    expect(callsigns[0]).toMatch(/^CLAUDE·api·[0-9a-f]{4}$/);
+    expect(callsigns[1]).toMatch(/^CLAUDE·api·[0-9a-f]{4}$/);
+    expect(callsigns[0]).not.toBe(callsigns[1]);
+  });
+
+  test("one session with that callsign gets no suffix", () => {
+    const { engine } = newEngine();
+    engine.upsertSession({ kind: "claude-code", session_key: "k1", label: "api" });
+    expect(engine.roster()[0]!.callsign).toBe("CLAUDE·api");
+  });
+
+  test("liveness: an open wait is Live regardless of last_seen", () => {
+    const { engine, clock } = newEngine();
+    const { token } = engine.upsertSession({ kind: "script", session_key: "w1" });
+    const s = engine.sessionFor(token);
+    const { round_id } = submit(engine, s, singleRound());
+    clock.advance(40 * 60); // past the Idle threshold
+    const waiting = engine.wait(s, round_id, 10);
+    expect(engine.roster().find((a) => a.id === s.id)!.liveness).toBe("live");
+    engine.send(round_id, { questions: { q1: { value: { selected: "a" } } } });
+    void waiting;
+  });
+
+  test("liveness buckets by last_seen without an open wait", () => {
+    const { engine, clock } = newEngine();
+    engine.upsertSession({ kind: "script", session_key: "oldest" }); // ages the most
+    clock.advance(1400); // 23m20s
+    engine.upsertSession({ kind: "script", session_key: "middle" });
+    clock.advance(540); // 9m
+    engine.upsertSession({ kind: "script", session_key: "freshest" }); // ages the least
+    clock.advance(60); // 1m
+    const byKey = (key: string) => engine.roster().find((a) => a.session_key === key)!.liveness;
+    expect(byKey("oldest")).toBe("gone"); // 2000s old, over the 1800s Idle threshold
+    expect(byKey("middle")).toBe("idle"); // 600s old
+    expect(byKey("freshest")).toBe("live"); // 60s old
+  });
+
+  test("Forget: the session disappears from the roster, cancels its pending Rounds, and a later contact brings it back", () => {
+    const { engine } = newEngine();
+    const res = engine.upsertSession({ kind: "script", session_key: "f2" });
+    const s = engine.sessionFor(res.token);
+    const { round_id } = submit(engine, s, singleRound());
+    engine.forget(res.session_id);
+    expect(engine.roster().some((a) => a.id === res.session_id)).toBe(false);
+    expect(engine.get(s, round_id)).toMatchObject({ outcome: "cancelled", cancelled_by: "human" });
+    engine.upsertSession({ kind: "script", session_key: "f2" });
+    expect(engine.roster().some((a) => a.id === res.session_id)).toBe(true);
+  });
+
+  test("resume handles are derived from kind and session key", () => {
+    const { engine } = newEngine();
+    engine.upsertSession({ kind: "claude-code", session_key: "sess-abc" });
+    engine.upsertSession({ kind: "script", session_key: "sess-xyz" });
+    const byKey = (key: string) => engine.roster().find((a) => a.session_key === key)!.resume;
+    expect(byKey("sess-abc")).toBe("claude --resume sess-abc");
+    expect(byKey("sess-xyz")).toBeNull();
+  });
+});

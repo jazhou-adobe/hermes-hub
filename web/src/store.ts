@@ -1,13 +1,14 @@
 import { useSyncExternalStore } from "react";
-import type { FeedRoundView, HubEvent } from "../../src/hub/engine.ts";
-import { feedRounds } from "./api.ts";
+import type { AgentView, FeedRoundView, HubEvent } from "../../src/hub/engine.ts";
+import { agentRoster, feedRounds } from "./api.ts";
 
 export interface State {
   rounds: FeedRoundView[];
+  agents: AgentView[];
   connection: "connecting" | "live" | "lost";
 }
 
-let state: State = { rounds: [], connection: "connecting" };
+let state: State = { rounds: [], agents: [], connection: "connecting" };
 const listeners = new Set<() => void>();
 
 function set(patch: Partial<State>): void {
@@ -25,6 +26,10 @@ export function useStore<T>(select: (s: State) => T): T {
   return useSyncExternalStore(subscribe, () => select(state));
 }
 
+async function refreshAgents(): Promise<void> {
+  set({ agents: await agentRoster() });
+}
+
 function upsert(view: FeedRoundView): FeedRoundView[] {
   const rest = state.rounds.filter((r) => r.id !== view.id);
   return view.status === "pending" || view.answer === null ? [...rest, view] : rest;
@@ -40,7 +45,8 @@ export function connect(): void {
   const events = new EventSource("/cc/events");
   events.addEventListener("hello", async () => {
     try {
-      set({ rounds: await feedRounds(), connection: "live" });
+      const [rounds] = await Promise.all([feedRounds(), refreshAgents()]);
+      set({ rounds, connection: "live" });
     } catch {
       set({ connection: "lost" });
     }
@@ -49,12 +55,16 @@ export function connect(): void {
     const event: Extract<HubEvent, { view: FeedRoundView }> = JSON.parse(e.data);
     set({ rounds: upsert(event.view) });
   };
-  events.addEventListener("round.created", onView);
+  events.addEventListener("round.created", (e) => {
+    onView(e);
+    void refreshAgents(); // a new Round changes the roster's pending counts
+  });
   events.addEventListener("round.locked", onView);
   events.addEventListener("round.superseded", onView);
   events.addEventListener("round.ended", (e) => {
     const event: Extract<HubEvent, { type: "round.ended" }> = JSON.parse(e.data);
     set({ rounds: event.view ? upsert(event.view) : state.rounds.filter((r) => r.id !== event.round_id) });
+    void refreshAgents();
   });
   events.addEventListener("round.removed", (e) => {
     const event: Extract<HubEvent, { type: "round.removed" }> = JSON.parse(e.data);
@@ -64,6 +74,7 @@ export function connect(): void {
     const event: Extract<HubEvent, { type: "draft.saved" }> = JSON.parse(e.data);
     set({ rounds: state.rounds.map((r) => (r.id === event.round_id ? { ...r, draft: event.draft } : r)) });
   });
+  events.addEventListener("session.forgotten", () => void refreshAgents());
   // Delegation (Advisors): a started or ended run refreshes the Round in place, keeping an
   // ended-in-place Round visible regardless of its Outcome (unlike `upsert`, used for pending-only views).
   const onAdvisorView = (e: MessageEvent) => {
