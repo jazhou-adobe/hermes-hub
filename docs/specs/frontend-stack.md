@@ -3,7 +3,7 @@
 Status: **confirmed by the Human on 2026-11-20**, ticket [What front-end stack does the Command Center use?](https://github.com/jazhou-adobe/hermes-hub/issues/15).
 
 - **Builds on:** the [Command Center behaviour](command-center.md), [security](security.md) and [transports](transports.md) specs.
-- **Design source:** `hermes-master/design` (Flight Director 2169).
+- **Design source:** [`jazhou-adobe/apollo-tokens`, `brands/hermes/design`](https://github.com/jazhou-adobe/apollo-tokens/tree/1d03cf95ad82e400e88e346ff0cb8cb683ee58da/brands/hermes/design) @ `1d03cf9` (Flight Director 2169); the copied commit is recorded in [`web/design-system/SOURCE.md`](../../web/design-system/SOURCE.md).
 
 ## Decision
 
