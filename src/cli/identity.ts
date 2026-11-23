@@ -15,8 +15,8 @@ export interface McpMeta {
   "vscode.conversationId"?: string;
 }
 
-/** MCP `clientInfo.name` (shim and `/mcp`); self-reported, so it is checked after the env vars. */
-export type McpClientInfo = { name: string } | undefined;
+/** MCP `clientInfo` (shim and `/mcp`); self-reported, so its name is checked after the env vars. */
+export type McpClientInfo = { name: string; version?: string } | undefined;
 
 export type AgentKind = "claude-code" | "codex" | "cursor-cli" | "cursor-ide" | "vscode-copilot" | "omp" | "script" | "unknown";
 
@@ -146,7 +146,7 @@ function gitContext(cwd: string): SessionRequest["git"] {
   return { root, branch, head, ...(remote.exitCode === 0 ? { remote: remote.stdout.toString().trim() } : {}) };
 }
 
-/** Builds the `POST /v1/sessions` body. `mcp` is supplied by the stdio shim and `/mcp` (S7); the CLI omits it. */
+/** Builds the `POST /v1/sessions` body. `mcp` is supplied by the stdio shim on every tool call; the CLI omits it. */
 export function detectSession(
   flags: IdentityFlags,
   env: Record<string, string | undefined> = process.env,
@@ -170,7 +170,7 @@ export function detectSession(
     cwd,
     git: gitContext(cwd),
     host: hostname(),
-    client_version: null,
+    client_version: mcp?.clientInfo?.version ?? null,
     detection: { step: detected.step, source: detected.source, documented: detected.documented },
     signals: {
       env: Object.fromEntries(Object.entries(env).filter(([k, v]) => v !== undefined && SIGNAL_ENV.test(k))),

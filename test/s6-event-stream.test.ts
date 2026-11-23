@@ -6,6 +6,7 @@ import { migrate } from "../src/db/db.ts";
 import { Engine, type Clock, type SessionRow } from "../src/hub/engine.ts";
 import { sse, startServer } from "../src/hub/server.ts";
 import { HubClient } from "../src/cli/client.ts";
+import { detectSession } from "../src/cli/identity.ts";
 import type { Answer, Round } from "../src/schema/types.ts";
 
 // ── Engine-level fixtures (mirrors test/engine.test.ts) ────────────────────
@@ -293,7 +294,7 @@ describe("HubClient.watch()", () => {
   test("streams round.ended Answers live, in order, as the Hub ends them", async () => {
     const { url } = await up();
     const client = new HubClient(url);
-    await client.openSession({ kind: "script", session: crypto.randomUUID() });
+    await client.openSession(detectSession({ kind: "script", session: crypto.randomUUID() }));
     const received: Answer[] = [];
     const controller = new AbortController();
     void client.watch((answer) => received.push(answer), controller.signal).catch(() => {});

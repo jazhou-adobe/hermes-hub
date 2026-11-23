@@ -9,8 +9,10 @@ import { runHub } from "../hub/run.ts";
 import { runningHub } from "../hub/lock.ts";
 import { backupsDir, configPath, dbPath, hubLockPath } from "../paths.ts";
 import type { Answer } from "../schema/types.ts";
+import { serveShim } from "../mcp/shim.ts";
 import { HubClient } from "./client.ts";
 import { hubUrl } from "./discovery.ts";
+import { detectSession } from "./identity.ts";
 
 const USAGE = `usage:
   hermes migrate                 create or upgrade the database
@@ -23,6 +25,7 @@ const USAGE = `usage:
   hermes cancel <round-id> [identity]
   hermes inbox [--format lines|json] [identity]
   hermes watch [identity]
+  hermes mcp [identity]          the stdio MCP shim (hermes_ask, hermes_wait, hermes_cancel, hermes_inbox)
 identity: [--label <label>] [--kind <kind>] [--session <id>]`;
 
 class UsageError extends Error {}
@@ -35,7 +38,7 @@ const identityOptions = {
 
 async function connect(values: { label?: string; kind?: string; session?: string }): Promise<HubClient> {
   const client = new HubClient(hubUrl());
-  await client.openSession(values);
+  await client.openSession(detectSession(values));
   return client;
 }
 
@@ -117,6 +120,13 @@ async function watch(args: string[]): Promise<number> {
   const { values } = parse(args, identityOptions, 0);
   await (await connect(values)).watch((answer) => printAnswer(answer));
   return 0;
+}
+
+/** The stdio MCP shim: serves until the client closes stdin. Identity is re-detected on every call. */
+function mcp(args: string[]): undefined {
+  const { values } = parse(args, identityOptions, 0);
+  serveShim(hubUrl(), values);
+  return undefined;
 }
 
 function runMigrate(): number {
@@ -218,6 +228,8 @@ async function main(argv: string[]): Promise<number | undefined> {
         return await inbox(rest);
       case "watch":
         return await watch(rest);
+      case "mcp":
+        return mcp(rest);
       default:
         throw new UsageError(command ? `unknown command ${command}` : "missing command");
     }

@@ -1,12 +1,11 @@
 import { HubError } from "../errors.ts";
-import type { Answer } from "../schema/types.ts";
-import { validateAnswer } from "../schema/validate.ts";
-import { detectSession, type IdentityFlags } from "./identity.ts";
+import type { Answer, PendingStatus } from "../schema/types.ts";
+import { validateAnswer, type SessionRequest } from "../schema/validate.ts";
 
 const WAIT_SECONDS = 25;
 const UNREACHABLE_LIMIT_MS = 5 * 60_000;
 
-function isRecord(v: unknown): v is Record<string, unknown> {
+export function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
@@ -16,7 +15,8 @@ export class HubClient {
 
   constructor(readonly baseUrl: string) {}
 
-  private async request(method: string, path: string, body?: unknown): Promise<Record<string, unknown>> {
+  /** `signal` aborts the request; its reason is rethrown as is, never as `hub_unavailable`. */
+  private async request(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
     let res: Response;
     try {
       res = await fetch(this.baseUrl + path, {
@@ -28,8 +28,10 @@ export class HubClient {
           ...(process.env.HERMES_ADVISOR ? { "Hermes-Advisor": process.env.HERMES_ADVISOR } : {}),
         },
         body: body === undefined ? undefined : JSON.stringify(body),
+        signal,
       });
-    } catch {
+    } catch (err) {
+      if (signal?.aborted) throw err;
       throw new HubError(
         "hub_unavailable",
         `cannot reach the Hub at ${this.baseUrl}. Start it with \`hermes hub\`; a sandboxed Agent needs the Hub Skill's sandbox setup`,
@@ -39,7 +41,8 @@ export class HubClient {
     let data: unknown;
     try {
       data = await res.json();
-    } catch {
+    } catch (err) {
+      if (signal?.aborted) throw err;
       throw new HubError("internal", `the Hub sent HTTP ${res.status} without a JSON body`);
     }
     if (!isRecord(data)) throw new HubError("internal", `the Hub sent HTTP ${res.status} with a non-object body`);
@@ -59,9 +62,9 @@ export class HubClient {
     return new HubError(typeof code === "string" ? code : "internal", typeof detail === "string" ? detail : `HTTP ${res.status}`, extra);
   }
 
-  /** `POST /v1/sessions`; the token lives in memory only. */
-  async openSession(flags: IdentityFlags): Promise<void> {
-    const res = await this.request("POST", "/v1/sessions", detectSession(flags));
+  /** `POST /v1/sessions` with a detected identity (`detectSession`); the token lives in memory only. */
+  async openSession(session: SessionRequest): Promise<void> {
+    const res = await this.request("POST", "/v1/sessions", session);
     if (typeof res.token !== "string") throw new HubError("internal", "session response without a token");
     this.token = res.token;
   }
@@ -90,6 +93,14 @@ export class HubClient {
     return res.answers.map(asAnswer);
   }
 
+  /** get, or wait when `waitSeconds` is given (1–55 s, the Hub's window): pending status or the Answer. */
+  async round(roundId: string, waitSeconds?: number, signal?: AbortSignal): Promise<Answer | PendingStatus> {
+    const query = waitSeconds === undefined ? "" : `?wait=${waitSeconds}`;
+    const res = await this.request("GET", `/v1/rounds/${encodeURIComponent(roundId)}${query}`, undefined, signal);
+    if (res.status !== "pending") return asAnswer(res);
+    return { status: "pending", next_deadline: typeof res.next_deadline === "string" ? res.next_deadline : null };
+  }
+
   /**
    * Long-polls until the Round ends. A lost connection is retried with backoff (the Round is safe in
    * the Hub); `hub_unavailable` only after 5 minutes without reaching it.
@@ -98,9 +109,9 @@ export class HubClient {
     let unreachableSince: number | undefined;
     let backoffMs = 500;
     for (;;) {
-      let res: Record<string, unknown>;
+      let res: Answer | PendingStatus;
       try {
-        res = await this.request("GET", `/v1/rounds/${encodeURIComponent(roundId)}?wait=${WAIT_SECONDS}`);
+        res = await this.round(roundId, WAIT_SECONDS);
       } catch (err) {
         if (!(err instanceof HubError && err.code === "hub_unavailable")) throw err;
         unreachableSince ??= Date.now();
@@ -111,7 +122,7 @@ export class HubClient {
       }
       unreachableSince = undefined;
       backoffMs = 500;
-      if (res.status !== "pending") return asAnswer(res);
+      if (!("status" in res)) return res;
     }
   }
 
