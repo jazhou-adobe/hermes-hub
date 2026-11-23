@@ -35,6 +35,12 @@ Status: **confirmed by the Human on 2026-11-20**, ticket [How does the Hub Skill
     - Claude Code: `sandbox.network.allowLocalBinding` or `allowedDomains: ["127.0.0.1:PORT"]`, or `excludedCommands: ["hermes"]`.
     - VS Code: `chat.agent.sandbox.network.allowLocalNetwork: true`.
 - **No edits to sandbox settings,** ever. The Human applies them.
+- **Pinned at implementation ([S9](https://github.com/jazhou-adobe/hermes-hub/issues/31)):**
+  - `hermes setup claude` checks `claude mcp get hermes` first (exit 1: no such server), shows the command, asks `[y/N]` on stdin, and then runs `claude mcp add --scope user hermes -- hermes mcp` (verified on Claude Code 2.1.231: it writes `mcpServers.hermes` to `~/.claude.json`). There is no flag that skips the question.
+  - Claude Code's `excludedCommands` entries are permission-rule patterns, where a bare `hermes` matches only `hermes` with no arguments, so the snippet is `excludedCommands: ["hermes *"]`. The doctor also notes that the shim, an MCP server, already runs outside Claude Code's sandbox.
+  - Inside Codex's sandbox (`CODEX_SANDBOX` set, `CODEX_SANDBOX_NETWORK_DISABLED=1`), the doctor says so above the Codex snippet. That sandbox also forbids spawning `ps`, so identity detection there works without the process ancestry.
+  - `.git/info/exclude` gets `/.agents/skills/hermes-hub/` (resolved with `git rev-parse --git-path`, so linked worktrees share it); `--commit` removes that line again. `projects.json` is `{"projects": [{"root", "committed"}]}`; `update --all` forgets a record whose copy is gone.
+  - The `hub_unavailable` message asks the Agent to have the Human start `hermes hub` and run `hermes doctor`.
 
 ## Which door the Skill teaches
 

@@ -72,7 +72,7 @@ Each error has a stable `code`. Over HTTP it is sent as `application/problem+jso
 | `unknown_session` | 401 | Missing or unknown `Hermes-Session` token on an endpoint that needs a session | |
 | `forbidden` | 403 | Host or Origin refused by the browser guard (security spec) | |
 | `advisor_cannot_ask` | 403 | A session or Round requested from an Advisor run (`HERMES_ADVISOR` set; [delegation spec](delegation.md)) | |
-| `hub_unavailable` | — | Client side only: the Hub can't be reached (it is down, or a sandbox blocks the connection). The message points to the Hub Skill's sandbox setup. | |
+| `hub_unavailable` | — | Client side only: the Hub can't be reached (it is down, or a sandbox blocks the connection). The message points to the Hub Skill's sandbox setup: `hermes doctor`. | |
 
 ## MCP
 

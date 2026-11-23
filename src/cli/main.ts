@@ -10,9 +10,13 @@ import { runningHub } from "../hub/lock.ts";
 import { backupsDir, configPath, dbPath, hubLockPath } from "../paths.ts";
 import type { Answer } from "../schema/types.ts";
 import { serveShim } from "../mcp/shim.ts";
+import { VERSION } from "../version.ts";
 import { HubClient } from "./client.ts";
 import { hubUrl } from "./discovery.ts";
+import { runDoctor } from "./doctor.ts";
 import { detectSession } from "./identity.ts";
+import { setupClaude } from "./setup.ts";
+import { findRepos, gitRoot, installSkill, staleSkillWarning, updateAllSkills, updateSkill } from "./skill.ts";
 
 const USAGE = `usage:
   hermes migrate                 create or upgrade the database
@@ -26,6 +30,11 @@ const USAGE = `usage:
   hermes inbox [--format lines|json] [identity]
   hermes watch [identity]
   hermes mcp [identity]          the stdio MCP shim (hermes_ask, hermes_wait, hermes_cancel, hermes_inbox)
+  hermes skill install [dir] [--commit]           copy the Hub Skill into <git root>/.agents/skills/hermes-hub
+  hermes skill install --all <folder> [--commit]  the same for every git repository under <folder>
+  hermes skill update [--all]    refresh this project's copy, or every recorded copy
+  hermes doctor                  check the Hub, the Skill and each client; print the sandbox settings
+  hermes setup claude            register the hermes mcp shim in Claude Code (asks first)
 identity: [--label <label>] [--kind <kind>] [--session <id>]`;
 
 class UsageError extends Error {}
@@ -36,9 +45,20 @@ const identityOptions = {
   session: { type: "string" },
 } as const;
 
+/** Opens the session and runs the version checks: one stderr line each, never failing the command. */
 async function connect(values: { label?: string; kind?: string; session?: string }): Promise<HubClient> {
   const client = new HubClient(hubUrl());
-  await client.openSession(detectSession(values));
+  const session = detectSession(values);
+  // The session's git context needs a HEAD; a repository without commits still has a root.
+  const skill = staleSkillWarning(session.git?.root ?? gitRoot(process.cwd()));
+  if (skill) console.error(skill);
+  const hubCheck = client.hubVersion().then(
+    (hub) => {
+      if (hub !== VERSION) console.error(`WARN hermes ${VERSION} != Hub ${hub} · restart hermes hub`);
+    },
+    () => {}, // an unreachable Hub is reported by the session call itself
+  );
+  await Promise.all([client.openSession(session), hubCheck]);
   return client;
 }
 
@@ -204,6 +224,63 @@ function runRestore(args: string[]): number {
   return 0;
 }
 
+/** `hermes skill install|update` (hub-skill spec, "Distribution: project copies"). */
+function runSkill(args: string[]): number {
+  const [sub, ...rest] = args;
+  let parsed;
+  try {
+    parsed = parseArgs({ args: rest, options: { all: { type: "boolean" }, commit: { type: "boolean" } }, allowPositionals: true, strict: true });
+  } catch (err) {
+    throw new UsageError(err instanceof Error ? err.message : String(err));
+  }
+  const { values, positionals } = parsed;
+  if (sub === "install") {
+    if (positionals.length > 1) throw new UsageError("hermes skill install takes at most one folder");
+    if (values.all && positionals.length !== 1) throw new UsageError("hermes skill install --all needs the folder to search");
+    const dirs = values.all ? findRepos(positionals[0]!) : [positionals[0] ?? process.cwd()];
+    if (dirs.length === 0) {
+      console.error(`hermes skill install: no git repository under ${positionals[0]}`);
+      return 1;
+    }
+    let code = 0;
+    for (const dir of dirs) {
+      const root = gitRoot(dir);
+      try {
+        if (!root) throw new Error(`${dir} is not in a git repository`);
+        console.log(installSkill(root, values.commit === true));
+      } catch (err) {
+        console.error(`hermes skill install: ${err instanceof Error ? err.message : String(err)}`);
+        code = 1;
+      }
+    }
+    return code;
+  }
+  if (sub === "update") {
+    if (positionals.length > 0 || values.commit) throw new UsageError("hermes skill update takes only --all");
+    try {
+      if (values.all) {
+        const lines = updateAllSkills();
+        console.log(lines.length ? lines.join("\n") : "no recorded hermes-hub skill copies; run hermes skill install");
+        return 0;
+      }
+      const root = gitRoot(process.cwd());
+      if (!root) throw new Error(`${process.cwd()} is not in a git repository`);
+      console.log(updateSkill(root));
+      return 0;
+    } catch (err) {
+      console.error(`hermes skill update: ${err instanceof Error ? err.message : String(err)}`);
+      return 1;
+    }
+  }
+  throw new UsageError(sub ? `unknown skill command ${sub}` : "hermes skill needs install or update");
+}
+
+function runSetup(args: string[]): number {
+  const { positionals } = parse(args, {}, 1);
+  if (positionals[0] !== "claude") throw new UsageError("hermes setup supports only claude");
+  return setupClaude();
+}
+
 async function main(argv: string[]): Promise<number | undefined> {
   const [command, ...rest] = argv;
   try {
@@ -230,6 +307,13 @@ async function main(argv: string[]): Promise<number | undefined> {
         return await watch(rest);
       case "mcp":
         return mcp(rest);
+      case "skill":
+        return runSkill(rest);
+      case "doctor":
+        parse(rest, {}, 0);
+        return await runDoctor(hubUrl());
+      case "setup":
+        return runSetup(rest);
       default:
         throw new UsageError(command ? `unknown command ${command}` : "missing command");
     }

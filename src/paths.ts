@@ -15,3 +15,6 @@ export const hubLockPath = () => join(hermesHome(), "hub.lock");
 export const configPath = () => join(hermesHome(), "config.toml");
 export const logPath = () => join(hermesHome(), "logs", "hub.log");
 export const backupsDir = () => join(hermesHome(), "backups");
+export const projectsPath = () => join(hermesHome(), "projects.json");
+/** The Hub Skill as shipped in this clone (hub-skill spec, Packaging). */
+export const SKILL_SOURCE = join(CLONE_ROOT, "skill", "hermes-hub");

@@ -97,36 +97,41 @@ const roundIdInput: Tool["inputSchema"] = {
   additionalProperties: false,
 };
 
-/** The Hub Skill's essentials for Claude Code, which learns Hermes only from these (hub-skill spec). */
-const INSTRUCTIONS = `Hermes Hub lets you ask the Human a decision you cannot or should not make alone, and get their Answer back.
-- Never ask for facts you can look up. Batch related decisions into one Round. Never ask when HERMES_ADVISOR is set.
-- hermes_ask submits a Round and waits for the Answer. If it returns status "pending", call hermes_wait with the round_id; never resubmit. To change a pending Round, ask again with "supersedes": "<round_id>".
-- After resuming a session, or whenever unsure whether Answers arrived while you were away, call hermes_inbox once.
-- Read the Answer's outcome: answered (use each Question's value), dismissed, redirected (follow message), expired (values set by policy), cancelled (see cancelled_by / superseded_by).`;
+/**
+ * The Hub Skill (`skill/hermes-hub/SKILL.md`) condensed for Claude Code, which learns Hermes only
+ * from these (hub-skill spec). Each text stays under the 2 KiB Claude Code shows of a description.
+ */
+export const INSTRUCTIONS = `Hermes Hub lets you ask the Human a decision and get their Answer back; the Human answers every Agent from one Command Center.
+- When: a decision you cannot or should not make alone (a trade-off the Human owns, an approval before an irreversible or visible action, an ambiguous requirement). Look facts up yourself and put them in the Round's context. Batch every decision that can be made now into one Round. Never ask when HERMES_ADVISOR is set.
+- Waiting: hermes_ask waits for the Answer. Do nothing else on that decision until it returns, and never poll. If it returns status "pending", call hermes_wait with the round_id; it blocks again. Never resubmit: to change a pending Round, call hermes_ask with "supersedes": "<round_id>" in the Round. hermes_cancel drops a Round that no longer matters.
+- After resuming a session, or when unsure whether Answers arrived while you were away, call hermes_inbox once.
+- Reading the Answer: outcome answered (use questions.<id>.value), dismissed (the Human declined; do not ask the same again unchanged), redirected (do what message says instead), expired (policies locked every Question), cancelled (cancelled_by "agent" is you, and superseded_by names your newer Round; "human" means stop asking about it). set_by is human, policy or none (value null). suggested_by marks an Advisor's suggestion the Human sent unchanged; it is still the Human's decision. Always read the notes: they qualify or override values. For an approve Question with edited true, act on the returned proposal, not yours.`;
 
-const TOOLS: Tool[] = [
+export const TOOLS: Tool[] = [
   {
     name: "hermes_ask",
     description: `Ask the Human a Round of Questions through Hermes Hub and wait for the Answer.
-Write a hermes.round/v1 Round: a short title, Markdown context, and Questions (kinds single, multi, text, approve) with stable ids. Always give a Recommended option. Pick an Unanswered Policy: "apply_recommended" or "cancel" with after_seconds when a default is safe, "wait" when only the Human may decide.
-Returns the Answer once the Human sends, dismisses or redirects it, or a policy ends it. With MCP Tasks it returns a task that completes with the Answer. Otherwise it waits up to 50 s and may return {"status":"pending","round_id"}; then call hermes_wait with that round_id until the Answer arrives.
-Errors carry a code: invalid_round (fix the Round), too_large, flood_cap (wait for an existing Answer first), round_ended (the superseded Round already ended; collect its Answer), hub_unavailable (tell the Human to start the Hub or run hermes doctor).`,
+Round (hermes.round/v1): title (plain, at most 120 characters), context (Markdown: why you ask and the facts you found), 1-20 questions. Kinds: single and multi (options, each with a stable id and a detail stating its consequence), text, approve (a proposal {format: text|command|json, value, editable}). Ids match ^[a-z0-9][a-z0-9_-]{0,63}$, are unique, and stay the same when you supersede. Always set recommended: a marker, never preselected. Unanswered Policy, on the Round or per Question: {"on_timeout":"wait"} (default) when only the Human may decide; {"on_timeout":"apply_recommended","after_seconds":N} when going ahead with the recommendation is safe; {"on_timeout":"cancel","after_seconds":N} when doing nothing is safe (N >= 10). Attachments are inline (markdown, diff, code, image, file, link): send excerpts, not whole files.
+Returns the Answer once the Human sends, dismisses or redirects the Round, or its policies end it. With MCP Tasks it returns a task that completes with the Answer: just wait for it. Otherwise it waits up to 50 s and may return {"status":"pending","round_id"}: then call hermes_wait with that round_id.
+Errors carry a code: invalid_round (fix the Round at each errors[].pointer), too_large (shrink the attachment at pointer below limit), flood_cap (wait for an existing Answer first), round_ended (the superseded Round already ended: collect it with hermes_wait), hub_unavailable (tell the Human to start hermes hub and run hermes doctor), advisor_cannot_ask (you are an Advisor run: never ask).`,
     inputSchema: askInputSchema(),
   },
   {
     name: "hermes_wait",
     description:
-      'Wait up to 50 s for the Answer to a Round you asked. Returns the Answer, or {"status":"pending","round_id","next_deadline"}: call hermes_wait again. Never resubmit the Round instead.',
+      'Wait up to 50 s for the Answer to a Round you asked. Returns the Answer, or {"status":"pending","round_id","next_deadline"}: call hermes_wait again, with nothing else in between on that decision. Never resubmit the Round instead. Also collects a Round that ended while you were away.',
     inputSchema: roundIdInput,
   },
   {
     name: "hermes_cancel",
-    description: "Cancel one of your pending Rounds; returns its Answer with outcome cancelled. Fails with round_ended if it already ended.",
+    description:
+      "Cancel one of your pending Rounds when its decision no longer matters; returns its Answer with outcome cancelled. To change a Round instead, hermes_ask with supersedes. Fails with round_ended (and the Outcome) if it already ended.",
     inputSchema: roundIdInput,
   },
   {
     name: "hermes_inbox",
-    description: "List Answers that arrived for you but were never picked up, oldest first. Call it once after resuming a session.",
+    description:
+      "List the Answers that arrived for you but were never picked up, oldest first; each counts as delivered once listed. Call it once after resuming a session, or when unsure whether Answers arrived while you were away. Never call it in a loop.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
 ];
