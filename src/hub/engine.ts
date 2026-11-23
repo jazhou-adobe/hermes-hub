@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG, type AutoAskRule, type HubConfig } from "../config.ts";
 import { HubError } from "../errors.ts";
-import { canonicalJson, effectivePolicy, hubChecks, oversizedAttachment } from "../schema/checks.ts";
+import { canonicalJson, hubChecks, oversizedAttachment } from "../schema/checks.ts";
+import { effectivePolicy } from "../schema/policy.ts";
+import { DEFAULT_SETTINGS, mergeSettings, type HubSettings } from "../settings.ts";
 import type { Answer, Outcome, PendingStatus, QuestionValue, Round } from "../schema/types.ts";
 import {
   isDismissInput,
@@ -81,7 +83,8 @@ export interface FeedRoundView {
   status: "pending" | Outcome;
   position: number;
   received_at: string;
-  session: { id: string; kind: string; callsign: string };
+  /** `project` is the session's git root, else its cwd (agent-identity spec); the Feed filters by it. */
+  session: { id: string; kind: string; callsign: string; project: string | null; branch: string | null };
   round: Round;
   locks: Locks;
   /** Absolute deadlines of open Questions, by Question id. */
@@ -108,6 +111,36 @@ export interface AgentView {
   resume: string | null;
   detection: { step: number; source: string; documented: boolean } | null;
   signals: Record<string, unknown> | null;
+  project: string | null;
+  git: { root?: string; branch?: string; head?: string; remote?: string } | null;
+  host: string | null;
+}
+
+/** One Round at its own URL (`/rounds/<id>`): any status, plus what only the log otherwise shows. */
+export interface RoundDetail {
+  view: FeedRoundView;
+  decided_at: string | null;
+  delivered_at: string | null;
+  /** Whether the Round is still in the Feed (pending, or ended in place and not removed). */
+  in_feed: boolean;
+}
+
+/** `config.toml` as loaded, for Settings (read-only there; hub-operations spec). */
+export interface ConfigStatus {
+  path: string | null;
+  /** When the file was last loaded successfully (the Hub's start, or a hot reload). */
+  loaded_at: string | null;
+  /** The last reload error; the previous config stays active while it is set. */
+  error: string | null;
+  /** Set when the port changed in the file but the Hub keeps serving on the old one. */
+  restart_needed: boolean;
+}
+
+export interface StorageInfo {
+  db_bytes: number;
+  /** Bytes of Attachment content across every stored Round (their share of the database). */
+  attachment_bytes: number;
+  rounds: number;
 }
 
 export type HubEvent =
@@ -123,7 +156,9 @@ export type HubEvent =
   /** An Advisor run started on this Round (delegation spec); `view.advisor_runs[0]` is the new run. */
   | { type: "advisor.started"; view: FeedRoundView }
   /** An Advisor run ended (succeeded, failed, timed out or was cancelled). */
-  | { type: "advisor.ended"; view: FeedRoundView };
+  | { type: "advisor.ended"; view: FeedRoundView }
+  /** The Command Center's live settings changed (from any tab). */
+  | { type: "settings.changed"; settings: HubSettings };
 
 /** Filters for the answered log; present fields combine with AND (answered-log spec). */
 export interface LogFilter {
@@ -178,6 +213,8 @@ function logFieldsFor(e: HubEvent): Record<string, unknown> {
       return { round_id: e.view.id, callsign: e.view.session.callsign };
     case "session.forgotten":
       return { session_id: e.session_id };
+    case "settings.changed":
+      return {};
   }
 }
 
@@ -229,6 +266,7 @@ export class Engine {
   private readonly waiting = new Map<string, number>();
   /** The one running Advisor process per Round, if any (delegation spec). */
   private readonly runningAdvisors = new Map<string, RunningAdvisor>();
+  private configStatus: ConfigStatus = { path: null, loaded_at: null, error: null, restart_needed: false };
 
   constructor(
     private readonly db: Database,
@@ -238,9 +276,30 @@ export class Engine {
     private readonly logger: Logger = noopLogger,
   ) {}
 
+  /** Records where `config.toml` was loaded from at start (shown read-only in Settings). */
+  setConfigSource(path: string): void {
+    this.configStatus = { path, loaded_at: this.now(), error: null, restart_needed: false };
+  }
+
   /** Applies a hot-reloaded `config.toml` (the caller, `src/hub/run.ts`, keeps the bound port). */
-  setConfig(config: HubConfig): void {
+  setConfig(config: HubConfig, restartNeeded = false): void {
     this.config = config;
+    this.configStatus = {
+      ...this.configStatus,
+      loaded_at: this.now(),
+      error: null,
+      restart_needed: this.configStatus.restart_needed || restartNeeded,
+    };
+  }
+
+  /** A reload failed: the previous config stays active and Settings shows the error. */
+  configFailed(message: string): void {
+    this.configStatus = { ...this.configStatus, error: message };
+  }
+
+  /** The loaded config and its status, for Settings → config.toml (read-only). */
+  configInfo(): { status: ConfigStatus; config: HubConfig } {
+    return { status: this.configStatus, config: this.config };
   }
 
   private get limits() {
@@ -520,11 +579,43 @@ export class Engine {
       .map((r) => this.view(r.id, callsigns)!);
   }
 
+  /** One Round at `/rounds/<id>`, whatever its status (command-center spec: Round detail). */
+  roundDetail(id: string): RoundDetail {
+    const row = this.row(id);
+    if (!row) throw new HubError("not_found", `no Round ${id}`);
+    return {
+      view: this.view(id)!,
+      decided_at: row.decided_at,
+      delivered_at: row.delivered_at,
+      in_feed: row.status === "pending" || row.feed_removed_at === null,
+    };
+  }
+
+  // ── Live settings (hub-operations spec: stored in the database) ─────────
+
+  settings(): HubSettings {
+    const row = this.db.query<{ value: string }, [string]>("SELECT value FROM settings WHERE key = ?").get("command_center");
+    if (!row) return DEFAULT_SETTINGS;
+    // Fill in defaults for settings added after this row was written.
+    const merged = mergeSettings(DEFAULT_SETTINGS, JSON.parse(row.value));
+    return typeof merged === "string" ? DEFAULT_SETTINGS : merged;
+  }
+
+  updateSettings(patch: unknown): HubSettings {
+    const next = mergeSettings(this.settings(), patch);
+    if (typeof next === "string") throw new HubError("invalid_settings", next);
+    this.db
+      .query("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value")
+      .run("command_center", JSON.stringify(next));
+    this.emit([{ type: "settings.changed", settings: next }]);
+    return next;
+  }
+
   /** The Agent roster: every session that has contacted the Hub and not been Forgotten. */
   roster(): AgentView[] {
     const rows = this.db
       .query<
-        SessionRow & { last_seen: string; detection: string | null; signals: string | null },
+        SessionRow & { last_seen: string; detection: string | null; signals: string | null; git: string | null; host: string | null },
         []
       >("SELECT * FROM sessions WHERE forgotten_at IS NULL ORDER BY last_seen DESC")
       .all();
@@ -552,6 +643,9 @@ export class Engine {
       resume: RESUME[r.kind]?.(r.session_key) ?? null,
       detection: r.detection && JSON.parse(r.detection),
       signals: r.signals && JSON.parse(r.signals),
+      project: project(r),
+      git: r.git && JSON.parse(r.git),
+      host: r.host,
     }));
   }
 
@@ -630,11 +724,6 @@ export class Engine {
   }
 
   // ── Delegation (Advisors) ────────────────────────────────────────────────
-
-  /** Configured Advisor names, for the Human's "Ask advisor" picker. */
-  advisorNames(): string[] {
-    return this.config.advisors.map((a) => a.name);
-  }
 
   /**
    * Starts an Advisor run on `roundId` (delegation spec): cancels any run already active on this
@@ -859,6 +948,19 @@ export class Engine {
     }
   }
 
+  /** Settings → Storage: the database size and the share of it that is Attachment content. */
+  storage(): StorageInfo {
+    const rows = this.db.query<{ round: string }, []>("SELECT round FROM rounds").all();
+    let attachment_bytes = 0;
+    for (const { round } of rows) {
+      const r: Round = JSON.parse(round);
+      for (const a of [...(r.attachments ?? []), ...r.questions.flatMap((q) => q.attachments ?? [])]) {
+        attachment_bytes += Buffer.byteLength(a.kind === "image" ? a.data : a.kind === "link" ? a.url : a.content);
+      }
+    }
+    return { db_bytes: this.dbSizeBytes(), attachment_bytes, rounds: rows.length };
+  }
+
   // ── Policies ────────────────────────────────────────────────────────────
 
   /**
@@ -1004,8 +1106,8 @@ export class Engine {
 
   private view(id: string, callsigns?: Map<string, string>): FeedRoundView | null {
     const r = this.db
-      .query<RoundRow & { kind: string; session_key: string; label: string | null; cwd: string | null }, [string]>(
-        "SELECT r.*, s.kind, s.session_key, s.label, s.cwd FROM rounds r JOIN sessions s ON s.id = r.session_id WHERE r.id = ?",
+      .query<RoundRow & { kind: string; session_key: string; label: string | null; cwd: string | null; git: string | null }, [string]>(
+        "SELECT r.*, s.kind, s.session_key, s.label, s.cwd, s.git FROM rounds r JOIN sessions s ON s.id = r.session_id WHERE r.id = ?",
       )
       .get(id);
     if (!r) return null;
@@ -1021,7 +1123,13 @@ export class Engine {
       status: r.status,
       position: r.position,
       received_at: r.received_at,
-      session: { id: r.session_id, kind: r.kind, callsign: callsigns?.get(r.session_id) ?? this.callsigns().get(r.session_id) ?? callsign(r) },
+      session: {
+        id: r.session_id,
+        kind: r.kind,
+        callsign: callsigns?.get(r.session_id) ?? this.callsigns().get(r.session_id) ?? callsign(r),
+        project: project(r),
+        branch: gitBranch(r.git),
+      },
       round: JSON.parse(r.round),
       locks: JSON.parse(r.locks),
       deadlines: Object.fromEntries(deadlines.map((d) => [d.question_id, d.deadline])),
@@ -1053,6 +1161,16 @@ export class Engine {
 
 function parseDraft(text: string | null): Draft | null {
   return text ? JSON.parse(text) : null;
+}
+
+function gitBranch(git: string | null): string | null {
+  if (!git) return null;
+  try {
+    const parsed: { branch?: unknown } | null = JSON.parse(git);
+    return typeof parsed?.branch === "string" && parsed.branch ? parsed.branch : null;
+  } catch {
+    return null;
+  }
 }
 
 /** On Supersede, the Draft carries over for Questions whose id and kind match. */

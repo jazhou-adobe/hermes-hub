@@ -1,0 +1,308 @@
+/*
+ * Hermes Hub runtime tokens. Source of truth: tokens.json (validation/validate-design-system.mjs checks parity).
+ * Theme contract: html[data-theme="<theme>"]; world colour option: html[data-theme="hermes-<world>"][data-palette="<id>"].
+ * Density contract: [data-density="compact"] on dense desktop regions, [data-density="glance"] for phone use.
+ * Raw visual values are allowed only in this token layer.
+ */
+
+/* Theme-independent tokens: primitives, type scale, density, elevation, layout, layers, components. */
+:root {
+  --hh-space-1: 0.25rem;
+  --hh-space-2: 0.5rem;
+  --hh-space-3: 0.75rem;
+  --hh-space-4: 1rem;
+  --hh-space-5: 1.25rem;
+  --hh-space-6: 1.5rem;
+  --hh-space-8: 2rem;
+  --hh-space-10: 2.5rem;
+  --hh-space-12: 3rem;
+  --hh-radius-sm: 0.125rem;
+  --hh-radius-md: 0.25rem;
+  --hh-radius-lg: 0.5rem;
+  --hh-radius-pill: 999px;
+  --hh-border-width-thin: 1px;
+  --hh-border-width-thick: 2px;
+  --hh-border-width-heavy: 4px;
+  --hh-font-sans: var(--font-schibsted-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --hh-font-mono: var(--font-spline-sans-mono), ui-monospace, monospace;
+  --hh-font-condensed: var(--font-big-shoulders), 'Arial Narrow', sans-serif;
+  --hh-font-weight-regular: 400;
+  --hh-font-weight-semibold: 600;
+  --hh-font-weight-bold: 700;
+  --hh-font-weight-heavy: 800;
+  --hh-letter-spacing-caps: 0.06em;
+  --hh-letter-spacing-tight: -0.01em;
+  --hh-letter-spacing-none: 0em;
+  --hh-motion-fast: 100ms;
+  --hh-motion-standard: 160ms;
+  --hh-motion-panel: 240ms;
+  --hh-motion-signature: 480ms;
+  --hh-motion-pulse: 1600ms;
+  --hh-motion-stagger: 40ms;
+  --hh-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --hh-easing-enter: cubic-bezier(0, 0, 0, 1);
+  --hh-easing-exit: cubic-bezier(0.3, 0, 1, 1);
+  --hh-easing-linear: cubic-bezier(0, 0, 1, 1);
+  --hh-easing-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --hh-opacity-disabled: 0.55;
+  --hh-type-display-family: var(--hh-font-condensed);
+  --hh-type-display-size: 2.75rem;
+  --hh-type-display-line-height: 1;
+  --hh-type-display-weight: var(--hh-font-weight-heavy);
+  --hh-type-heading-lg-family: var(--hh-font-condensed);
+  --hh-type-heading-lg-size: 1.875rem;
+  --hh-type-heading-lg-line-height: 1.05;
+  --hh-type-heading-lg-weight: var(--hh-font-weight-bold);
+  --hh-type-heading-md-family: var(--hh-font-sans);
+  --hh-type-heading-md-size: 1.125rem;
+  --hh-type-heading-md-line-height: 1.3;
+  --hh-type-heading-md-weight: var(--hh-font-weight-bold);
+  --hh-type-body-lg-family: var(--hh-font-sans);
+  --hh-type-body-lg-size: 1.0625rem;
+  --hh-type-body-lg-line-height: 1.55;
+  --hh-type-body-lg-weight: var(--hh-font-weight-regular);
+  --hh-type-body-family: var(--hh-font-sans);
+  --hh-type-body-size: 0.9375rem;
+  --hh-type-body-line-height: 1.5;
+  --hh-type-body-weight: var(--hh-font-weight-regular);
+  --hh-type-body-sm-family: var(--hh-font-sans);
+  --hh-type-body-sm-size: 0.8125rem;
+  --hh-type-body-sm-line-height: 1.45;
+  --hh-type-body-sm-weight: var(--hh-font-weight-regular);
+  --hh-type-label-family: var(--hh-font-sans);
+  --hh-type-label-size: 0.8125rem;
+  --hh-type-label-line-height: 1.3;
+  --hh-type-label-weight: var(--hh-font-weight-semibold);
+  --hh-type-mono-family: var(--hh-font-mono);
+  --hh-type-mono-size: 0.875rem;
+  --hh-type-mono-line-height: 1.5;
+  --hh-type-mono-weight: var(--hh-font-weight-regular);
+  --hh-type-mono-sm-family: var(--hh-font-mono);
+  --hh-type-mono-sm-size: 0.75rem;
+  --hh-type-mono-sm-line-height: 1.4;
+  --hh-type-mono-sm-weight: var(--hh-font-weight-semibold);
+  --hh-type-strip-header-family: var(--hh-font-condensed);
+  --hh-type-strip-header-size: 1.25rem;
+  --hh-type-strip-header-line-height: 1.05;
+  --hh-type-strip-header-weight: var(--hh-font-weight-bold);
+  --hh-density-inset: 1rem;
+  --hh-density-gap: 0.75rem;
+  --hh-density-control-padding-block: 0.5rem;
+  --hh-density-control-padding-inline: 0.875rem;
+  --hh-density-row-height: 2.75rem;
+  --hh-elevation-raised: 0 0.125rem 0.375rem 0 var(--hh-shadow);
+  --hh-elevation-overlay: 0 0.75rem 2rem 0 var(--hh-shadow);
+  --hh-elevation-live: 0 0 0.625rem 0 var(--hh-live);
+  --hh-layout-sidebar-width: 17rem;
+  --hh-layout-content-max: 80rem;
+  --hh-layout-measure: 42rem;
+  --hh-layout-bay-width: 26rem;
+  --hh-layout-phone-frame-width: 24.375rem;
+  --hh-layout-gallery-column-min: 22rem;
+  --hh-layout-specimen-frame-height: 44rem;
+  --hh-layout-thumbnail-width: 45rem;
+  --hh-layout-thumbnail-height: 28.125rem;
+  --hh-layer-raised: 10;
+  --hh-layer-sticky: 20;
+  --hh-layer-dropdown: 30;
+  --hh-layer-overlay: 40;
+  --hh-layer-popover: 50;
+  --hh-layer-toast: 60;
+  --hh-layer-tooltip: 70;
+  --hh-layer-skip-link: 80;
+  --hh-button-min-target: 2.25rem;
+  --hh-control-size-sm: calc(var(--hh-button-min-target) * 0.8);
+  --hh-control-size-lg: calc(var(--hh-button-min-target) * 1.25);
+  --hh-focus-ring-width: 2px;
+  --hh-focus-ring-offset: 2px;
+  --hh-strip-min-height: 4.5rem;
+  --hh-strip-holder-width: 0.375rem;
+  --hh-timer-track-height: 0.25rem;
+  --hh-callsign-chip-height: 1.5rem;
+  --hh-option-row-min-height: 2.75rem;
+  --hh-kbd-size: 1.375rem;
+  --hh-icon-size: 1.125em;
+  --hh-avatar-size-sm: 1.5rem;
+  --hh-avatar-size-md: 2.25rem;
+  --hh-overlay-dialog-width: 34rem;
+  --hh-overlay-drawer-width: 26rem;
+  --hh-overlay-popover-width: 20rem;
+  --hh-overlay-tooltip-width: 16rem;
+  --hh-overlay-menu-width: 14rem;
+  --hh-code-max-height: 20rem;
+  --hh-progress-track-height: 0.375rem;
+  --hh-press-scale: 0.98;
+  --hh-enter-scale: 0.98;
+  --hh-enter-offset: var(--hh-space-2);
+}
+
+/* Ops-room slate board with paper-cream strips in dark ink. The default. */
+:root,
+html[data-theme="hermes-dark"] {
+  color-scheme: dark;
+  --hh-background: #111519;
+  --hh-foreground: #e8e2d0;
+  --hh-surface-card: #1a1f25;
+  --hh-surface-card-foreground: #e8e2d0;
+  --hh-surface-panel: #151a1f;
+  --hh-surface-panel-foreground: #e8e2d0;
+  --hh-surface-shelf: #1e242b;
+  --hh-surface-shelf-foreground: #e8e2d0;
+  --hh-surface-tray: #0d1014;
+  --hh-surface-tray-foreground: #e8e2d0;
+  --hh-primary: #e9c46a;
+  --hh-primary-foreground: #15181c;
+  --hh-secondary: #262d35;
+  --hh-secondary-foreground: #e8e2d0;
+  --hh-muted: #20262d;
+  --hh-muted-foreground: #a7adb4;
+  --hh-accent: #d9773a;
+  --hh-accent-foreground: #0b0d10;
+  --hh-destructive: #e36a5f;
+  --hh-destructive-foreground: #0b0d10;
+  --hh-border: #7a828b;
+  --hh-input: #0e1216;
+  --hh-ring: #c8622a;
+  --hh-success: #5bb878;
+  --hh-success-foreground: #0b0d10;
+  --hh-warning: #e0a33a;
+  --hh-warning-foreground: #0b0d10;
+  --hh-info: #7bb4d6;
+  --hh-info-foreground: #0b0d10;
+  --hh-strip: #f2ead6;
+  --hh-strip-foreground: #1a1a17;
+  --hh-pending: #b17419;
+  --hh-pending-foreground: #0b0d10;
+  --hh-answered: #59879f;
+  --hh-answered-foreground: #0b0d10;
+  --hh-expired: #7a8289;
+  --hh-expired-foreground: #0b0d10;
+  --hh-recommended: #319251;
+  --hh-recommended-foreground: #0b0d10;
+  --hh-live: #4fd6e8;
+  --hh-live-foreground: #06232a;
+  --hh-code: #0b0e12;
+  --hh-code-foreground: #d6dccf;
+  --hh-diff-add: #14301f;
+  --hh-diff-remove: #3a1a1b;
+  --hh-agent-1: #e3c05a;
+  --hh-agent-2: #5fbf72;
+  --hh-agent-3: #e5675c;
+  --hh-agent-4: #b48ae0;
+  --hh-agent-5: #6fa8e8;
+  --hh-agent-6: #c49a6c;
+  --hh-shadow: #0000008c;
+  --hh-scrim: #05070acc;
+  --hh-chart-1: #6fa8e8;
+  --hh-chart-2: #e3c05a;
+  --hh-chart-3: #5fbf72;
+  --hh-chart-4: #b48ae0;
+  --hh-chart-5: #e5675c;
+}
+
+/* Day-shift board: pale bay, white strips, the same holders and callsigns. */
+html[data-theme="hermes-light"] {
+  color-scheme: light;
+  --hh-background: #d6d3c8;
+  --hh-foreground: #16191d;
+  --hh-surface-card: #f7f6f1;
+  --hh-surface-card-foreground: #16191d;
+  --hh-surface-panel: #e8e5dd;
+  --hh-surface-panel-foreground: #16191d;
+  --hh-surface-shelf: #eeebe4;
+  --hh-surface-shelf-foreground: #16191d;
+  --hh-surface-tray: #ccc8bc;
+  --hh-surface-tray-foreground: #16191d;
+  --hh-primary: #1f262e;
+  --hh-primary-foreground: #f3d77e;
+  --hh-secondary: #d6d2c7;
+  --hh-secondary-foreground: #16191d;
+  --hh-muted: #dcd8ce;
+  --hh-muted-foreground: #4a5057;
+  --hh-accent: #a8481a;
+  --hh-accent-foreground: #ffffff;
+  --hh-destructive: #b0281f;
+  --hh-destructive-foreground: #ffffff;
+  --hh-border: #686c72;
+  --hh-input: #f0efe9;
+  --hh-ring: #a8481a;
+  --hh-success: #23733e;
+  --hh-success-foreground: #ffffff;
+  --hh-warning: #8a5600;
+  --hh-warning-foreground: #ffffff;
+  --hh-info: #2a5c82;
+  --hh-info-foreground: #ffffff;
+  --hh-strip: #ffffff;
+  --hh-strip-foreground: #16191d;
+  --hh-pending: #965c0c;
+  --hh-pending-foreground: #ffffff;
+  --hh-answered: #3d6b82;
+  --hh-answered-foreground: #ffffff;
+  --hh-expired: #646a71;
+  --hh-expired-foreground: #ffffff;
+  --hh-recommended: #22743f;
+  --hh-recommended-foreground: #ffffff;
+  --hh-live: #0b6f80;
+  --hh-live-foreground: #ffffff;
+  --hh-code: #ecebe4;
+  --hh-code-foreground: #1b1f24;
+  --hh-diff-add: #d5eadb;
+  --hh-diff-remove: #f3d9d5;
+  --hh-agent-1: #80600a;
+  --hh-agent-2: #2c7439;
+  --hh-agent-3: #ad3329;
+  --hh-agent-4: #764ca8;
+  --hh-agent-5: #2d63a6;
+  --hh-agent-6: #7a5434;
+  --hh-shadow: #1a1d2129;
+  --hh-scrim: #16191d99;
+  --hh-chart-1: #2d63a6;
+  --hh-chart-2: #80600a;
+  --hh-chart-3: #2c7439;
+  --hh-chart-4: #764ca8;
+  --hh-chart-5: #ad3329;
+}
+
+/* Dense desktop regions: the triage list, the answered log, Agent roster tables. Lowers padding, gaps, rows, and strip height; the target stays at or above 24px. */
+[data-density="compact"] {
+  --hh-density-inset: 0.625rem;
+  --hh-density-gap: 0.5rem;
+  --hh-density-control-padding-block: 0.3125rem;
+  --hh-density-control-padding-inline: 0.625rem;
+  --hh-density-row-height: 2.125rem;
+  --hh-strip-min-height: 3.5rem;
+  --hh-option-row-min-height: 2.25rem;
+  --hh-button-min-target: 2rem;
+  --hh-control-size-sm: calc(var(--hh-button-min-target) * 0.8);
+  --hh-control-size-lg: calc(var(--hh-button-min-target) * 1.25);
+  --hh-type-body-size: 0.875rem;
+}
+
+/* Phone use over the tailnet: touch-sized targets, roomier rows, larger body text. Wins over any nested compact region. */
+[data-density="glance"],
+[data-density="glance"] [data-density="compact"] {
+  --hh-density-inset: 1.25rem;
+  --hh-density-gap: 1rem;
+  --hh-density-control-padding-block: 0.75rem;
+  --hh-density-control-padding-inline: 1.25rem;
+  --hh-density-row-height: 3.5rem;
+  --hh-strip-min-height: 5rem;
+  --hh-option-row-min-height: 3.5rem;
+  --hh-button-min-target: 3rem;
+  --hh-control-size-sm: calc(var(--hh-button-min-target) * 0.8);
+  --hh-control-size-lg: calc(var(--hh-button-min-target) * 1.25);
+  --hh-type-body-size: 1.0625rem;
+  --hh-type-body-line-height: 1.55;
+}
+
+/* Reduced motion: every duration collapses, so state changes stay instant and visible without movement. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --hh-motion-fast: 1ms;
+    --hh-motion-standard: 1ms;
+    --hh-motion-panel: 1ms;
+    --hh-motion-signature: 1ms;
+    --hh-motion-pulse: 1ms;
+    --hh-motion-stagger: 1ms;
+  }
+}

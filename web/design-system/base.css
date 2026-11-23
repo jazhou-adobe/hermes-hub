@@ -1,0 +1,43 @@
+/* Base rules copied from brands/hermes/design/app/globals.css (the @layer base block; the Tailwind and preview imports are left out). */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    background: var(--hh-background);
+  }
+
+  body {
+    margin: 0;
+    background: var(--hh-background);
+    color: var(--hh-foreground);
+    font-family: var(--hh-type-body-family);
+    font-size: var(--hh-type-body-size);
+    line-height: var(--hh-type-body-line-height);
+    font-weight: var(--hh-type-body-weight);
+    transition:
+      background-color var(--hh-motion-standard) var(--hh-easing-standard),
+      color var(--hh-motion-standard) var(--hh-easing-standard);
+  }
+
+  :focus-visible {
+    outline: var(--hh-focus-ring-width) solid var(--hh-ring);
+    outline-offset: var(--hh-focus-ring-offset);
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--hh-font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  code {
+    overflow-wrap: anywhere;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}

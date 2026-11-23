@@ -1,5 +1,6 @@
 import Ajv2020 from "ajv/dist/2020.js";
-import type { Attachment, Policy, Question, Round } from "./types.ts";
+import { effectivePolicy } from "./policy.ts";
+import type { Attachment, Question, Round } from "./types.ts";
 import type { ValidationIssue } from "./validate.ts";
 
 /** Size caps (round-schema spec): per attachment after base64, and per submitted Round body. */
@@ -10,11 +11,6 @@ export const LIMITS = {
 } as const;
 
 const proposalSchemas = new Ajv2020({ strict: false });
-
-/** The Question's effective Unanswered Policy: its own, else the Round's, else wait. */
-export function effectivePolicy(round: Round, q: Question): Policy {
-  return q.policy ?? round.policy ?? { on_timeout: "wait" };
-}
 
 /** Checks the JSON Schema cannot express. Assumes the Round already passed the schema. */
 export function hubChecks(round: Round): ValidationIssue[] {

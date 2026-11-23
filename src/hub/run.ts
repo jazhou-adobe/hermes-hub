@@ -8,6 +8,7 @@ import { watchConfig } from "./configWatcher.ts";
 import { Engine } from "./engine.ts";
 import { acquireLock, releaseLock } from "./lock.ts";
 import { createLogger } from "./log.ts";
+import { Notifier, osascriptPoster } from "./notify.ts";
 import { startServer } from "./server.ts";
 
 /** How many ports above the configured one to try before giving up (two Hubs, different folders). */
@@ -63,9 +64,14 @@ export async function runHub(): Promise<number | undefined> {
   }
 
   const hubJson = hubJsonPath(); // resolved before the server may chdir: HERMES_HOME may be relative
+  const cfgPath = configPath();
   const engine = new Engine(db, url, undefined, config, logger);
+  engine.setConfigSource(cfgPath);
   engine.start();
-  const server = await startServer(engine, port, logger);
+  const poster = osascriptPoster();
+  const notifier = poster ? new Notifier(engine, poster, undefined, logger) : undefined;
+  notifier?.start();
+  const server = await startServer(engine, port, logger, notifier);
   writeFileSync(
     hubJson,
     `${JSON.stringify({ url, version: VERSION, pid: process.pid, started_at: new Date().toISOString() }, null, 2)}\n`,
@@ -82,12 +88,12 @@ export async function runHub(): Promise<number | undefined> {
   }, DAILY_BACKUP_CHECK_MS);
 
   const stopWatching = watchConfig(
-    configPath(),
+    cfgPath,
     () => config,
     (reload) => {
       config = reload.config;
       logger.setLevel(config.log_level);
-      engine.setConfig(config);
+      engine.setConfig(config, reload.restartNeeded);
       if (reload.restartNeeded) {
         logger.log("warn", "config.restart_needed", { setting: "port" });
         console.warn("hermes hub: config.toml's port changed; restart needed to apply it");
@@ -96,6 +102,7 @@ export async function runHub(): Promise<number | undefined> {
       }
     },
     (err) => {
+      engine.configFailed(err.message);
       logger.log("error", "config.invalid", { error: err.message });
       console.error(`hermes hub: ${err.message}`);
     },
@@ -106,6 +113,7 @@ export async function runHub(): Promise<number | undefined> {
     clearInterval(backupTimer);
     releaseLock(lockPath);
     rmSync(hubJson, { force: true });
+    notifier?.stop();
     engine.stop();
     void server.stop(true);
     db.close();

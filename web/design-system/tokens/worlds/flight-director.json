@@ -1,0 +1,1078 @@
+{
+  "label": "Flight Director 2169",
+  "order": 4,
+  "$description": "Flight Director 2169: the Command Center as a flight director's room a century and a half on. Every Agent holds a console position, Rounds are strips racked at the director's desk, a wide geometric face labels the consoles, and phosphor lights only values that are live right now.",
+  "signature": "GO / NO-GO polling for approve/reject Rounds, with text labels. Each approve/reject Question is a console position on the loop: its answer slot prints STANDBY, POLLING while it is the current position, or the latched call GO / NO-GO in words. A called key keeps a two-colour focus perimeter on its fill. The aggregate is the core's text tally in the Answer bar (secondary metadata, only for Rounds with several positions). On /worlds, Play signature polls and calls the first Round's position and holds the result until replay or a colour change.",
+  "colorScheme": "dark",
+  "color": {
+    "background": {
+      "$type": "color",
+      "$value": "#101519"
+    },
+    "foreground": {
+      "$type": "color",
+      "$value": "#e4e1d7"
+    },
+    "surface-card": {
+      "$type": "color",
+      "$value": "#1a2228"
+    },
+    "surface-card-foreground": {
+      "$type": "color",
+      "$value": "#e4e1d7"
+    },
+    "surface-panel": {
+      "$type": "color",
+      "$value": "#20292f"
+    },
+    "surface-panel-foreground": {
+      "$type": "color",
+      "$value": "#ebe8de"
+    },
+    "surface-shelf": {
+      "$type": "color",
+      "$value": "#151c21"
+    },
+    "surface-shelf-foreground": {
+      "$type": "color",
+      "$value": "#e4e1d7"
+    },
+    "surface-tray": {
+      "$type": "color",
+      "$value": "#252f36"
+    },
+    "surface-tray-foreground": {
+      "$type": "color",
+      "$value": "#eeebe2"
+    },
+    "primary": {
+      "$type": "color",
+      "$value": "#e6dcc0"
+    },
+    "primary-foreground": {
+      "$type": "color",
+      "$value": "#16181a"
+    },
+    "secondary": {
+      "$type": "color",
+      "$value": "#2f3b43"
+    },
+    "secondary-foreground": {
+      "$type": "color",
+      "$value": "#eceee9"
+    },
+    "muted": {
+      "$type": "color",
+      "$value": "#1c2429"
+    },
+    "muted-foreground": {
+      "$type": "color",
+      "$value": "#a3aeb2"
+    },
+    "accent": {
+      "$type": "color",
+      "$value": "#33424b"
+    },
+    "accent-foreground": {
+      "$type": "color",
+      "$value": "#f0ede4"
+    },
+    "destructive": {
+      "$type": "color",
+      "$value": "#e8806a"
+    },
+    "destructive-foreground": {
+      "$type": "color",
+      "$value": "#1b0d09"
+    },
+    "border": {
+      "$type": "color",
+      "$value": "#76838a"
+    },
+    "input": {
+      "$type": "color",
+      "$value": "#0c1114"
+    },
+    "ring": {
+      "$type": "color",
+      "$value": "#5f8399"
+    },
+    "success": {
+      "$type": "color",
+      "$value": "#86d39e"
+    },
+    "success-foreground": {
+      "$type": "color",
+      "$value": "#0b1a10"
+    },
+    "warning": {
+      "$type": "color",
+      "$value": "#e3b55a"
+    },
+    "warning-foreground": {
+      "$type": "color",
+      "$value": "#1a1205"
+    },
+    "info": {
+      "$type": "color",
+      "$value": "#8cbcdc"
+    },
+    "info-foreground": {
+      "$type": "color",
+      "$value": "#0b1620"
+    },
+    "strip": {
+      "$type": "color",
+      "$value": "#ebe3cd"
+    },
+    "strip-foreground": {
+      "$type": "color",
+      "$value": "#1a1812"
+    },
+    "pending": {
+      "$type": "color",
+      "$value": "#a87420"
+    },
+    "pending-foreground": {
+      "$type": "color",
+      "$value": "#0e0a03"
+    },
+    "answered": {
+      "$type": "color",
+      "$value": "#5f8399"
+    },
+    "answered-foreground": {
+      "$type": "color",
+      "$value": "#050b0f"
+    },
+    "expired": {
+      "$type": "color",
+      "$value": "#7a7d80"
+    },
+    "expired-foreground": {
+      "$type": "color",
+      "$value": "#050505"
+    },
+    "recommended": {
+      "$type": "color",
+      "$value": "#468a58"
+    },
+    "recommended-foreground": {
+      "$type": "color",
+      "$value": "#04100a"
+    },
+    "live": {
+      "$type": "color",
+      "$value": "#7df0a8"
+    },
+    "live-foreground": {
+      "$type": "color",
+      "$value": "#07120c"
+    },
+    "code": {
+      "$type": "color",
+      "$value": "#0b1013"
+    },
+    "code-foreground": {
+      "$type": "color",
+      "$value": "#d6dfda"
+    },
+    "diff-add": {
+      "$type": "color",
+      "$value": "#163120"
+    },
+    "diff-remove": {
+      "$type": "color",
+      "$value": "#3a1b19"
+    },
+    "agent-1": {
+      "$type": "color",
+      "$value": "#e2a65c"
+    },
+    "agent-2": {
+      "$type": "color",
+      "$value": "#7fb6e2"
+    },
+    "agent-3": {
+      "$type": "color",
+      "$value": "#c79ce2"
+    },
+    "agent-4": {
+      "$type": "color",
+      "$value": "#93d18c"
+    },
+    "agent-5": {
+      "$type": "color",
+      "$value": "#e88e8e"
+    },
+    "agent-6": {
+      "$type": "color",
+      "$value": "#d6cf6c"
+    },
+    "shadow": {
+      "$type": "color",
+      "$value": "#0000008c"
+    },
+    "scrim": {
+      "$type": "color",
+      "$value": "#06090bb8"
+    },
+    "chart-1": {
+      "$type": "color",
+      "$value": "#7fb6e2"
+    },
+    "chart-2": {
+      "$type": "color",
+      "$value": "#e2a65c"
+    },
+    "chart-3": {
+      "$type": "color",
+      "$value": "#93d18c"
+    },
+    "chart-4": {
+      "$type": "color",
+      "$value": "#c79ce2"
+    },
+    "chart-5": {
+      "$type": "color",
+      "$value": "#e88e8e"
+    }
+  },
+  "overrides": {
+    "font-sans": {
+      "$type": "fontFamily",
+      "$value": "var(--font-archivo), ui-sans-serif, system-ui, sans-serif",
+      "$description": "Archivo (variable 100–900): every operational word: Round titles, Questions, headings, controls, navigation."
+    },
+    "font-mono": {
+      "$type": "fontFamily",
+      "$value": "var(--font-ibm-plex-mono), ui-monospace, monospace",
+      "$description": "IBM Plex Mono 400–700: callsigns, Round ids, timers and code, always with tabular numerals."
+    },
+    "font-condensed": {
+      "$type": "fontFamily",
+      "$value": "var(--font-michroma), 'Eurostile', Arial, sans-serif",
+      "$description": "Michroma (one 400 cut), the wide console face. Identity and short legends only: the display line, the app-bar brand, holder status words and the GO / NO-GO calls. Round titles and headings never use it."
+    },
+    "type-display-size": {
+      "$type": "dimension",
+      "$value": "2.125rem",
+      "$description": "Michroma is wide: a smaller display keeps hero lines on one row."
+    },
+    "type-display-line-height": {
+      "$type": "number",
+      "$value": 1.15,
+      "$description": "Open leading for the wide face."
+    },
+    "type-display-weight": {
+      "$type": "fontWeight",
+      "$value": "var(--hh-font-weight-regular)",
+      "$description": "Michroma ships one weight; never synthesised bold."
+    },
+    "type-heading-lg-family": {
+      "$type": "fontFamily",
+      "$value": "var(--hh-font-sans)",
+      "$description": "Section and page headings are operational: Archivo, not the wide face."
+    },
+    "type-heading-lg-size": {
+      "$type": "dimension",
+      "$value": "1.5rem",
+      "$description": "Archivo bold headings sized for scanning."
+    },
+    "type-heading-lg-line-height": {
+      "$type": "number",
+      "$value": 1.2,
+      "$description": "Heading leading for Archivo."
+    },
+    "type-heading-lg-weight": {
+      "$type": "fontWeight",
+      "$value": "var(--hh-font-weight-bold)",
+      "$description": "Archivo 700, a real cut of the variable face."
+    },
+    "type-strip-header-family": {
+      "$type": "fontFamily",
+      "$value": "var(--hh-font-sans)",
+      "$description": "Round titles are scanned all day: Archivo, never the wide face."
+    },
+    "type-strip-header-size": {
+      "$type": "dimension",
+      "$value": "1.125rem",
+      "$description": "Round titles sit at or above the Question prompt size (body-lg), so the title leads the strip."
+    },
+    "type-strip-header-line-height": {
+      "$type": "number",
+      "$value": 1.3,
+      "$description": "Two-line titles stay compact."
+    },
+    "type-strip-header-weight": {
+      "$type": "fontWeight",
+      "$value": "var(--hh-font-weight-semibold)",
+      "$description": "Archivo 600, a real cut of the variable face."
+    },
+    "letter-spacing-caps": {
+      "$type": "dimension",
+      "$value": "0.08em",
+      "$description": "Tracking for the short uppercase legends that remain (status words, badges, poll calls)."
+    },
+    "letter-spacing-tight": {
+      "$type": "dimension",
+      "$value": "0em",
+      "$description": "The wide display face is never tightened."
+    },
+    "radius-sm": {
+      "$type": "dimension",
+      "$value": "0.0625rem",
+      "$description": "Machined key caps and holder tabs: barely broken edges."
+    },
+    "radius-md": {
+      "$type": "dimension",
+      "$value": "0.1875rem",
+      "$description": "Console modules, inputs, cards."
+    },
+    "radius-lg": {
+      "$type": "dimension",
+      "$value": "0.375rem",
+      "$description": "Dialog and sheet bezels."
+    },
+    "elevation-raised": {
+      "$type": "shadow",
+      "$value": "0 0.0625rem 0.1875rem 0 var(--hh-shadow)",
+      "$description": "Soft contact depth: modules sit on the desk without a hard offset lip."
+    },
+    "elevation-overlay": {
+      "$type": "shadow",
+      "$value": "0 0.875rem 1.75rem -0.5rem var(--hh-shadow)",
+      "$description": "Overlays lift off the desk."
+    },
+    "elevation-live": {
+      "$type": "shadow",
+      "$value": "0 0 0.5rem 0 var(--hh-live)",
+      "$description": "A tight bloom in the live colour, for live state only."
+    }
+  },
+  "palette": {
+    "label": "Console slate"
+  },
+  "palettes": [
+    {
+      "id": "night-watch",
+      "label": "Night watch",
+      "$description": "Night watch: warm red-shifted room lighting, buff strips, teal phosphor.",
+      "colorScheme": "dark",
+      "color": {
+        "background": {
+          "$type": "color",
+          "$value": "#0f0c0b"
+        },
+        "foreground": {
+          "$type": "color",
+          "$value": "#ece0d2"
+        },
+        "surface-card": {
+          "$type": "color",
+          "$value": "#1c1715"
+        },
+        "surface-card-foreground": {
+          "$type": "color",
+          "$value": "#ece0d2"
+        },
+        "surface-panel": {
+          "$type": "color",
+          "$value": "#231d1a"
+        },
+        "surface-panel-foreground": {
+          "$type": "color",
+          "$value": "#f0e5d8"
+        },
+        "surface-shelf": {
+          "$type": "color",
+          "$value": "#161210"
+        },
+        "surface-shelf-foreground": {
+          "$type": "color",
+          "$value": "#ece0d2"
+        },
+        "surface-tray": {
+          "$type": "color",
+          "$value": "#2a2320"
+        },
+        "surface-tray-foreground": {
+          "$type": "color",
+          "$value": "#f3e9dd"
+        },
+        "primary": {
+          "$type": "color",
+          "$value": "#e9c9a0"
+        },
+        "primary-foreground": {
+          "$type": "color",
+          "$value": "#1a1008"
+        },
+        "secondary": {
+          "$type": "color",
+          "$value": "#3a2f2a"
+        },
+        "secondary-foreground": {
+          "$type": "color",
+          "$value": "#f3e9dd"
+        },
+        "muted": {
+          "$type": "color",
+          "$value": "#1f1916"
+        },
+        "muted-foreground": {
+          "$type": "color",
+          "$value": "#b8a698"
+        },
+        "accent": {
+          "$type": "color",
+          "$value": "#43352e"
+        },
+        "accent-foreground": {
+          "$type": "color",
+          "$value": "#f6ece0"
+        },
+        "destructive": {
+          "$type": "color",
+          "$value": "#ef7f6a"
+        },
+        "destructive-foreground": {
+          "$type": "color",
+          "$value": "#1d0b07"
+        },
+        "border": {
+          "$type": "color",
+          "$value": "#8a7a70"
+        },
+        "input": {
+          "$type": "color",
+          "$value": "#0a0807"
+        },
+        "ring": {
+          "$type": "color",
+          "$value": "#a07058"
+        },
+        "success": {
+          "$type": "color",
+          "$value": "#8fd6a4"
+        },
+        "success-foreground": {
+          "$type": "color",
+          "$value": "#0b1a10"
+        },
+        "warning": {
+          "$type": "color",
+          "$value": "#e8b860"
+        },
+        "warning-foreground": {
+          "$type": "color",
+          "$value": "#1a1205"
+        },
+        "info": {
+          "$type": "color",
+          "$value": "#9cc0dc"
+        },
+        "info-foreground": {
+          "$type": "color",
+          "$value": "#0b1620"
+        },
+        "strip": {
+          "$type": "color",
+          "$value": "#e8dcc4"
+        },
+        "strip-foreground": {
+          "$type": "color",
+          "$value": "#1c160e"
+        },
+        "pending": {
+          "$type": "color",
+          "$value": "#a3701f"
+        },
+        "pending-foreground": {
+          "$type": "color",
+          "$value": "#0e0a03"
+        },
+        "answered": {
+          "$type": "color",
+          "$value": "#5a7e92"
+        },
+        "answered-foreground": {
+          "$type": "color",
+          "$value": "#050b0f"
+        },
+        "expired": {
+          "$type": "color",
+          "$value": "#7c7874"
+        },
+        "expired-foreground": {
+          "$type": "color",
+          "$value": "#050505"
+        },
+        "recommended": {
+          "$type": "color",
+          "$value": "#46885a"
+        },
+        "recommended-foreground": {
+          "$type": "color",
+          "$value": "#04100a"
+        },
+        "live": {
+          "$type": "color",
+          "$value": "#6fe6c8"
+        },
+        "live-foreground": {
+          "$type": "color",
+          "$value": "#06110e"
+        },
+        "code": {
+          "$type": "color",
+          "$value": "#0c0a09"
+        },
+        "code-foreground": {
+          "$type": "color",
+          "$value": "#e4dcd2"
+        },
+        "diff-add": {
+          "$type": "color",
+          "$value": "#1a3122"
+        },
+        "diff-remove": {
+          "$type": "color",
+          "$value": "#3d1c18"
+        },
+        "agent-1": {
+          "$type": "color",
+          "$value": "#e6a865"
+        },
+        "agent-2": {
+          "$type": "color",
+          "$value": "#86b8e6"
+        },
+        "agent-3": {
+          "$type": "color",
+          "$value": "#cfa2e6"
+        },
+        "agent-4": {
+          "$type": "color",
+          "$value": "#99d493"
+        },
+        "agent-5": {
+          "$type": "color",
+          "$value": "#ee9590"
+        },
+        "agent-6": {
+          "$type": "color",
+          "$value": "#dcd274"
+        },
+        "shadow": {
+          "$type": "color",
+          "$value": "#00000099"
+        },
+        "scrim": {
+          "$type": "color",
+          "$value": "#080504bd"
+        },
+        "chart-1": {
+          "$type": "color",
+          "$value": "#86b8e6"
+        },
+        "chart-2": {
+          "$type": "color",
+          "$value": "#e6a865"
+        },
+        "chart-3": {
+          "$type": "color",
+          "$value": "#99d493"
+        },
+        "chart-4": {
+          "$type": "color",
+          "$value": "#cfa2e6"
+        },
+        "chart-5": {
+          "$type": "color",
+          "$value": "#ee9590"
+        }
+      }
+    },
+    {
+      "id": "day-shift",
+      "label": "Day shift",
+      "$description": "Day shift: pale console paint and white strips. Exposed live marks use a dark signal green; bright phosphor stays inside dark readout wells.",
+      "colorScheme": "light",
+      "color": {
+        "background": {
+          "$type": "color",
+          "$value": "#d4d1c6"
+        },
+        "foreground": {
+          "$type": "color",
+          "$value": "#1a1c1d"
+        },
+        "surface-card": {
+          "$type": "color",
+          "$value": "#ecebe5"
+        },
+        "surface-card-foreground": {
+          "$type": "color",
+          "$value": "#1a1c1d"
+        },
+        "surface-panel": {
+          "$type": "color",
+          "$value": "#e2e0d8"
+        },
+        "surface-panel-foreground": {
+          "$type": "color",
+          "$value": "#1a1c1d"
+        },
+        "surface-shelf": {
+          "$type": "color",
+          "$value": "#c9c6ba"
+        },
+        "surface-shelf-foreground": {
+          "$type": "color",
+          "$value": "#16181a"
+        },
+        "surface-tray": {
+          "$type": "color",
+          "$value": "#f4f3ee"
+        },
+        "surface-tray-foreground": {
+          "$type": "color",
+          "$value": "#1a1c1d"
+        },
+        "primary": {
+          "$type": "color",
+          "$value": "#23343e"
+        },
+        "primary-foreground": {
+          "$type": "color",
+          "$value": "#f4f1e8"
+        },
+        "secondary": {
+          "$type": "color",
+          "$value": "#c3c8c8"
+        },
+        "secondary-foreground": {
+          "$type": "color",
+          "$value": "#1a1c1d"
+        },
+        "muted": {
+          "$type": "color",
+          "$value": "#dddbd2"
+        },
+        "muted-foreground": {
+          "$type": "color",
+          "$value": "#474e52"
+        },
+        "accent": {
+          "$type": "color",
+          "$value": "#b9c6cc"
+        },
+        "accent-foreground": {
+          "$type": "color",
+          "$value": "#14181a"
+        },
+        "destructive": {
+          "$type": "color",
+          "$value": "#a8301e"
+        },
+        "destructive-foreground": {
+          "$type": "color",
+          "$value": "#ffffff"
+        },
+        "border": {
+          "$type": "color",
+          "$value": "#5f625f"
+        },
+        "input": {
+          "$type": "color",
+          "$value": "#fbfaf6"
+        },
+        "ring": {
+          "$type": "color",
+          "$value": "#1d5f8a"
+        },
+        "success": {
+          "$type": "color",
+          "$value": "#1f6b3a"
+        },
+        "success-foreground": {
+          "$type": "color",
+          "$value": "#ffffff"
+        },
+        "warning": {
+          "$type": "color",
+          "$value": "#8a5a08"
+        },
+        "warning-foreground": {
+          "$type": "color",
+          "$value": "#ffffff"
+        },
+        "info": {
+          "$type": "color",
+          "$value": "#1d5a80"
+        },
+        "info-foreground": {
+          "$type": "color",
+          "$value": "#ffffff"
+        },
+        "strip": {
+          "$type": "color",
+          "$value": "#fdfcf8"
+        },
+        "strip-foreground": {
+          "$type": "color",
+          "$value": "#17150f"
+        },
+        "pending": {
+          "$type": "color",
+          "$value": "#8a5a10"
+        },
+        "pending-foreground": {
+          "$type": "color",
+          "$value": "#ffffff"
+        },
+        "answered": {
+          "$type": "color",
+          "$value": "#2e6a84"
+        },
+        "answered-foreground": {
+          "$type": "color",
+          "$value": "#ffffff"
+        },
+        "expired": {
+          "$type": "color",
+          "$value": "#686a6c"
+        },
+        "expired-foreground": {
+          "$type": "color",
+          "$value": "#ffffff"
+        },
+        "recommended": {
+          "$type": "color",
+          "$value": "#1e6e3c"
+        },
+        "recommended-foreground": {
+          "$type": "color",
+          "$value": "#ffffff"
+        },
+        "live": {
+          "$type": "color",
+          "$value": "#256d44"
+        },
+        "live-foreground": {
+          "$type": "color",
+          "$value": "#ffffff"
+        },
+        "code": {
+          "$type": "color",
+          "$value": "#14191c"
+        },
+        "code-foreground": {
+          "$type": "color",
+          "$value": "#d9e1dc"
+        },
+        "diff-add": {
+          "$type": "color",
+          "$value": "#17321f"
+        },
+        "diff-remove": {
+          "$type": "color",
+          "$value": "#3c1b19"
+        },
+        "agent-1": {
+          "$type": "color",
+          "$value": "#9a4f00"
+        },
+        "agent-2": {
+          "$type": "color",
+          "$value": "#2563a8"
+        },
+        "agent-3": {
+          "$type": "color",
+          "$value": "#7a3fa0"
+        },
+        "agent-4": {
+          "$type": "color",
+          "$value": "#2f7a2a"
+        },
+        "agent-5": {
+          "$type": "color",
+          "$value": "#b0353a"
+        },
+        "agent-6": {
+          "$type": "color",
+          "$value": "#6b6400"
+        },
+        "shadow": {
+          "$type": "color",
+          "$value": "#28241c47"
+        },
+        "scrim": {
+          "$type": "color",
+          "$value": "#1416188c"
+        },
+        "chart-1": {
+          "$type": "color",
+          "$value": "#2563a8"
+        },
+        "chart-2": {
+          "$type": "color",
+          "$value": "#9a4f00"
+        },
+        "chart-3": {
+          "$type": "color",
+          "$value": "#2f7a2a"
+        },
+        "chart-4": {
+          "$type": "color",
+          "$value": "#7a3fa0"
+        },
+        "chart-5": {
+          "$type": "color",
+          "$value": "#b0353a"
+        }
+      }
+    },
+    {
+      "id": "original",
+      "label": "Original",
+      "$description": "Original: the first colours, blue-grey console paint of the old control rooms and P1 green phosphor.",
+      "colorScheme": "dark",
+      "color": {
+        "background": {
+          "$type": "color",
+          "$value": "#131c22"
+        },
+        "foreground": {
+          "$type": "color",
+          "$value": "#e2e6e2"
+        },
+        "surface-card": {
+          "$type": "color",
+          "$value": "#1d2930"
+        },
+        "surface-card-foreground": {
+          "$type": "color",
+          "$value": "#e2e6e2"
+        },
+        "surface-panel": {
+          "$type": "color",
+          "$value": "#24333d"
+        },
+        "surface-panel-foreground": {
+          "$type": "color",
+          "$value": "#e8ece8"
+        },
+        "surface-shelf": {
+          "$type": "color",
+          "$value": "#18232a"
+        },
+        "surface-shelf-foreground": {
+          "$type": "color",
+          "$value": "#e2e6e2"
+        },
+        "surface-tray": {
+          "$type": "color",
+          "$value": "#27363f"
+        },
+        "surface-tray-foreground": {
+          "$type": "color",
+          "$value": "#eef1ee"
+        },
+        "primary": {
+          "$type": "color",
+          "$value": "#e9e0c2"
+        },
+        "primary-foreground": {
+          "$type": "color",
+          "$value": "#141a1e"
+        },
+        "secondary": {
+          "$type": "color",
+          "$value": "#33454f"
+        },
+        "secondary-foreground": {
+          "$type": "color",
+          "$value": "#eef1ee"
+        },
+        "muted": {
+          "$type": "color",
+          "$value": "#1f2b33"
+        },
+        "muted-foreground": {
+          "$type": "color",
+          "$value": "#a6b4b9"
+        },
+        "accent": {
+          "$type": "color",
+          "$value": "#3a4f5b"
+        },
+        "accent-foreground": {
+          "$type": "color",
+          "$value": "#f1f3f0"
+        },
+        "destructive": {
+          "$type": "color",
+          "$value": "#ec7b62"
+        },
+        "destructive-foreground": {
+          "$type": "color",
+          "$value": "#1b0c08"
+        },
+        "border": {
+          "$type": "color",
+          "$value": "#77858c"
+        },
+        "input": {
+          "$type": "color",
+          "$value": "#0e151a"
+        },
+        "ring": {
+          "$type": "color",
+          "$value": "#5e86a0"
+        },
+        "success": {
+          "$type": "color",
+          "$value": "#7ee09a"
+        },
+        "success-foreground": {
+          "$type": "color",
+          "$value": "#0a1a0f"
+        },
+        "warning": {
+          "$type": "color",
+          "$value": "#e6b84e"
+        },
+        "warning-foreground": {
+          "$type": "color",
+          "$value": "#1a1205"
+        },
+        "info": {
+          "$type": "color",
+          "$value": "#88bde0"
+        },
+        "info-foreground": {
+          "$type": "color",
+          "$value": "#0a1620"
+        },
+        "strip": {
+          "$type": "color",
+          "$value": "#efe7cf"
+        },
+        "strip-foreground": {
+          "$type": "color",
+          "$value": "#1a1812"
+        },
+        "pending": {
+          "$type": "color",
+          "$value": "#ab7620"
+        },
+        "pending-foreground": {
+          "$type": "color",
+          "$value": "#0e0a03"
+        },
+        "answered": {
+          "$type": "color",
+          "$value": "#5c869e"
+        },
+        "answered-foreground": {
+          "$type": "color",
+          "$value": "#050b0f"
+        },
+        "expired": {
+          "$type": "color",
+          "$value": "#7b7f82"
+        },
+        "expired-foreground": {
+          "$type": "color",
+          "$value": "#050505"
+        },
+        "recommended": {
+          "$type": "color",
+          "$value": "#47905a"
+        },
+        "recommended-foreground": {
+          "$type": "color",
+          "$value": "#04100a"
+        },
+        "live": {
+          "$type": "color",
+          "$value": "#66ff99"
+        },
+        "live-foreground": {
+          "$type": "color",
+          "$value": "#06120a"
+        },
+        "code": {
+          "$type": "color",
+          "$value": "#0c1216"
+        },
+        "code-foreground": {
+          "$type": "color",
+          "$value": "#d6e0da"
+        },
+        "diff-add": {
+          "$type": "color",
+          "$value": "#173322"
+        },
+        "diff-remove": {
+          "$type": "color",
+          "$value": "#3b1a19"
+        },
+        "agent-1": {
+          "$type": "color",
+          "$value": "#e8aa5c"
+        },
+        "agent-2": {
+          "$type": "color",
+          "$value": "#80bde8"
+        },
+        "agent-3": {
+          "$type": "color",
+          "$value": "#cba0e8"
+        },
+        "agent-4": {
+          "$type": "color",
+          "$value": "#94d98e"
+        },
+        "agent-5": {
+          "$type": "color",
+          "$value": "#f0918c"
+        },
+        "agent-6": {
+          "$type": "color",
+          "$value": "#dcd46c"
+        },
+        "shadow": {
+          "$type": "color",
+          "$value": "#0000008c"
+        },
+        "scrim": {
+          "$type": "color",
+          "$value": "#05090cb8"
+        },
+        "chart-1": {
+          "$type": "color",
+          "$value": "#80bde8"
+        },
+        "chart-2": {
+          "$type": "color",
+          "$value": "#e8aa5c"
+        },
+        "chart-3": {
+          "$type": "color",
+          "$value": "#94d98e"
+        },
+        "chart-4": {
+          "$type": "color",
+          "$value": "#cba0e8"
+        },
+        "chart-5": {
+          "$type": "color",
+          "$value": "#f0918c"
+        }
+      }
+    }
+  ]
+}

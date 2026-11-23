@@ -32,13 +32,17 @@ graph LR
 web/
 ├── index.html                 entry; Bun bundles the TSX and CSS it imports
 ├── src/
-│   ├── main.tsx               mount, theme attributes, router
+│   ├── main.tsx               mount
+│   ├── shell.tsx              app bar, side nav, routes, toasts, live region, theme attributes
 │   ├── router.ts              tiny History-API router (5 routes; no router dependency)
-│   ├── store.ts               live store (see Data)
+│   ├── store.ts               live store (see Data), clock offset, toasts and announcements
 │   ├── api.ts                 typed fetch for actions; types from the Round/Answer schema
-│   ├── feed/ …                Feed, index, Round, Question, action bar
-│   ├── agents/ … log/ … settings/ …
-│   └── widgets/               design widgets copied from preview/components/hermes, adapted to Hub types
+│   ├── notify.ts              browser notifications, permission, sound
+│   ├── keys.tsx               key map, the `?` dialog, text-field guard
+│   ├── app.css                design-system imports + layout glue ported from web/preview (`pv-` classes)
+│   ├── feed/ …                Feed, index, Round, Question, Attachment, action bar
+│   └── detail/ … agents/ … log/ … settings/ …
+├── preview/                   the approved static Feed preview (the visual reference) and GAPS.md
 └── design-system/             copied per the adoption manifest (read-only here)
     ├── SOURCE.md              brand, master commit, theme, colour option, deviations
     ├── tokens/ (themes.css, tailwind-theme.css, tokens.json, worlds/flight-director.*)
@@ -47,23 +51,24 @@ web/
     └── foundations/ components/ patterns/ agent-contract/
 ```
 
+The design master has no React widgets for these screens yet, so the components are written here from the preview's markup (the `.hh-*` classes); there is no `widgets/` folder.
+
 ## Serving
 
 - **Routes:** the Hub's `Bun.serve` mounts `web/index.html` (an HTML import) on the UI routes. Bun bundles the TSX and CSS, with hot reload in development and minified assets in production.
 - **Running from the clone** ([operations](hub-operations.md)): the Hub serves the Command Center **from source** through Bun's HTML import, building it on the fly. There are no embedded or released assets in Phase 1.
-- **Security headers:** the browser guard and CSP from the security spec apply. No inline scripts are allowed. Development-only hot reload may need a dev-only CSP allowance (verified at implementation).
+- **Security headers:** the browser guard and CSP from the security spec apply. No inline scripts or style attributes in the served HTML; React's `style` prop (CSSOM) sets the timer and progress custom properties. The CSP allows `font-src data:` because Bun inlines the fonts. Development hot reload is not covered by the CSP.
 - **The `<html>` element** carries `data-theme="hermes-flight-director"` (Settings → Appearance can switch to `hermes-dark` or `hermes-light`, or change the colour option) and `data-density="compact"` for the Feed index.
 
 ## Styling
 
-- **CSS import order** follows the adoption skill:
-  1. Tailwind 4
-  2. `themes.css`
-  3. `tailwind-theme.css`
-  4. `hermes-components.css` in `layer(components)`
-  5. the world stylesheet, unlayered
-  6. the base layer from the design's `globals.css`
-- **Tailwind 4** runs through Bun's Tailwind plugin. It is used for layout glue only; component looks come from the design's classes (`.hh-*`).
+- **CSS import order** follows the adoption skill, without Tailwind:
+  1. `themes.css`
+  2. `hermes-components.css` in `layer(components)`
+  3. the world stylesheet, unlayered
+  4. the base layer from the design's `globals.css` (`base.css`)
+- **No Tailwind.** Layout glue is plain CSS on `--hh-*` tokens in `web/src/app.css`, ported from the approved preview; component looks come from the design's classes (`.hh-*`). `tailwind-theme.css` stays copied for a future change.
+- **Full width.** The shell, Feed column, Round strips, log table, Agents, Lanes and Settings span the viewport beside the side nav and the Feed index. Only typographic measures (`--hh-layout-measure` on prose, Question text and the search input) cap line length.
 - **Motion** uses only the `--hh-motion-*` and `--hh-easing-*` tokens, and respects reduced motion (`foundations/motion.md`).
 
 ## Fonts
@@ -89,8 +94,8 @@ web/
 - **Timers** count down locally from the server's deadlines, corrected by the server clock offset sent when the stream opens. The Hub stays the authority on when a Lock fires.
 - **Focus safety:** Rounds and Questions are keyed by id, so live updates never re-mount an input that has focus, and new Rounds append without moving scroll or focus.
 
-## Left to implementation slicing
+## Implementation notes
 
-- The exact paths of the Command Center endpoints and the Human SSE stream. They are internal and never documented in the Hub Skill.
-- The test approach (component tests, an end-to-end smoke run, axe for WCAG 2.2 AA).
-- Production-mode bundling flags for the HTML import.
+- **Command Center endpoints** (internal, under `/cc/`): `rounds`, `rounds/:id` (Round detail, any status), `rounds/:id/{draft,send,dismiss,redirect,remove,advisor,advisor/cancel}`, `agents`, `agents/:id/forget`, `settings` (GET/PUT), `config` (read-only config.toml and storage), `notifications/permission`, `log`, `log/export`, and the Human SSE stream `events`.
+- **Tests:** `bun test` covers the Hub side. `bun run test:browser` drives the installed Chrome with puppeteer-core against a real Hub: focus and scroll safety when a Round arrives, keys and auto-advance, reduced motion. axe-core (WCAG 2.2 AA tags) runs against the same pages.
+- **Production bundling:** `Bun.build` with `minify`, hashed names under `/assets/`, and `NODE_ENV=production`.

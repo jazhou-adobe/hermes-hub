@@ -35,7 +35,7 @@ Any web page open in the Human's browser can send requests to `localhost`, throu
    - This covers every door: `/v1/*`, `/mcp` (the MCP spec requires Origin validation), the Command Center's endpoints, and the SSE streams.
 3. **No CORS.** The Hub never sends `Access-Control-Allow-*` headers.
 4. **State changes take JSON.** Every state-changing endpoint requires `Content-Type: application/json`, which a cross-site HTML form cannot send without a preflight.
-5. **Command Center headers:** `Content-Security-Policy: default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'` (image Attachments arrive as base64), plus `X-Content-Type-Options: nosniff`.
+5. **Command Center headers:** `Content-Security-Policy: default-src 'self'; img-src 'self' data:; font-src 'self' data:; frame-ancestors 'none'; base-uri 'none'` (image Attachments arrive as base64; Bun's CSS bundler inlines the self-hosted fonts as data: URLs), plus `X-Content-Type-Options: nosniff`.
 
 ## Known limits (accepted for Phase 1)
 
