@@ -41,3 +41,18 @@ export function resolveCallsigns(sessions: (CallsignInput & { liveness: "live" |
     }),
   );
 }
+
+/** The project a session belongs to: its git root, else its cwd, else none (agent-identity spec). */
+export function project(s: { git: string | null; cwd: string | null }): string | null {
+  if (s.git) {
+    try {
+      const parsed: unknown = JSON.parse(s.git);
+      if (parsed && typeof parsed === "object" && "root" in parsed && typeof parsed.root === "string" && parsed.root) {
+        return parsed.root;
+      }
+    } catch {
+      // malformed git JSON falls through to cwd
+    }
+  }
+  return s.cwd;
+}

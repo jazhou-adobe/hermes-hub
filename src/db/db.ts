@@ -1,6 +1,8 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { backupNow, migrationBackupPath } from "../hub/backup.ts";
+import { backupsDir } from "../paths.ts";
 
 const MIGRATIONS_DIR = join(import.meta.dir, "migrations");
 
@@ -40,13 +42,18 @@ export function migrationStatus(db: Database): MigrationStatus {
 
 export class DowngradeError extends Error {}
 
-/** Applies pending migrations in one transaction. Refuses a database newer than this checkout. */
+/** Applies pending migrations in one transaction, after a backup (hub-operations spec). Refuses a
+ * database newer than this checkout. No backup for an in-memory database: there's nothing to
+ * protect, and it has no data folder to back up into. */
 export function migrate(db: Database): Migration[] {
   const status = migrationStatus(db);
   if (status.current > status.latest) {
     throw new DowngradeError(
       `database is at version ${status.current}, newer than this checkout (${status.latest}); update the clone`,
     );
+  }
+  if (status.pending.length > 0 && db.filename !== "" && db.filename !== ":memory:") {
+    backupNow(db, migrationBackupPath(backupsDir()));
   }
   db.transaction(() => {
     for (const m of status.pending) {

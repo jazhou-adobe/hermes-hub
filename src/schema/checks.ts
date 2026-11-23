@@ -65,15 +65,15 @@ function attachmentBytes(a: Attachment): number {
   return Buffer.byteLength(a.kind === "image" ? a.data : a.kind === "link" ? a.url : a.content);
 }
 
-/** The first attachment over the per-attachment cap, as a JSON pointer. */
-export function oversizedAttachment(round: Round): string | undefined {
+/** The first attachment over `limits.attachment_bytes` (config-overridable; `LIMITS` by default), as a JSON pointer. */
+export function oversizedAttachment(round: Round, limits: Pick<typeof LIMITS, "attachment_bytes"> = LIMITS): string | undefined {
   const all: [string, Attachment][] = [
     ...(round.attachments ?? []).map((a, i): [string, Attachment] => [`/attachments/${i}`, a]),
     ...round.questions.flatMap((q, i) =>
       (q.attachments ?? []).map((a, j): [string, Attachment] => [`/questions/${i}/attachments/${j}`, a]),
     ),
   ];
-  return all.find(([, a]) => attachmentBytes(a) > LIMITS.attachment_bytes)?.[0];
+  return all.find(([, a]) => attachmentBytes(a) > limits.attachment_bytes)?.[0];
 }
 
 /** JSON with object keys sorted recursively: "same body" for idempotency (lifecycle rule 10). */

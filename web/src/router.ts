@@ -1,18 +1,34 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 
-/** A tiny History-API router (frontend-stack spec: no router dependency). */
-function subscribe(listener: () => void): () => void {
-  window.addEventListener("popstate", listener);
-  return () => window.removeEventListener("popstate", listener);
+/** A tiny History-API router: just enough to switch between the Feed and the answered log. */
+function normalize(path: string): string {
+  return path.replace(/\/+$/, "") || "/";
+}
+
+let current = normalize(location.pathname);
+const listeners = new Set<() => void>();
+
+function set(path: string): void {
+  current = normalize(path);
+  for (const listener of listeners) listener();
+}
+
+window.addEventListener("popstate", () => set(location.pathname));
+
+export function navigate(path: string): void {
+  if (normalize(path) === current) return;
+  history.pushState({}, "", path);
+  set(path);
 }
 
 export function usePath(): string {
-  return useSyncExternalStore(subscribe, () => window.location.pathname);
-}
-
-export function navigate(path: string): void {
-  if (path !== window.location.pathname) {
-    history.pushState(null, "", path);
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  }
+  const [path, setPath] = useState(current);
+  useEffect(() => {
+    const listener = () => setPath(current);
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }, []);
+  return path;
 }
