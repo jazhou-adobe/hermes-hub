@@ -546,284 +546,284 @@ export function PendingRound({
       >
         <RoundHead view={view} now={now} />
         <div className="hh-round-flow">
-        <ol className="hh-round-questions">
-          <AdvisorRow view={view} now={now} />
-          {round.questions.map((q, i) => {
-            const lock = locks[q.id];
-            const s = suggestion?.questions[q.id];
-            let state: SuggestionState = null;
-            if (s && !lock) {
-              if (filled.has(q.id)) state = "filled";
-              else if (changed.has(q.id)) state = "changed";
-              else if (isAnswered(values[q.id]) && !sameValue(values[q.id], s.value)) state = "offer";
-            }
-            return (
-              <Question
-                key={q.id}
-                view={view}
-                question={q}
-                index={i}
-                mode={lock ? "locked" : "open"}
-                value={lock ? lock.value : values[q.id]}
-                draftValue={lock ? values[q.id] : undefined}
-                onChange={(v) => setValue(q.id, v)}
-                current={current?.id === q.id}
-                suggestion={s && suggestion ? { advisor: suggestion.advisor, value: s.value, ...(s.rationale ? { rationale: s.rationale } : {}) } : undefined}
-                suggestionState={state}
-                onAcceptSuggestion={() => s && setValue(q.id, s.value)}
-                onCopyDraft={() => copy(draftText(view), "Draft")}
-                now={now}
-              />
-            );
-          })}
-        </ol>
-        <details className="hh-notes" open={notesOpen} onToggle={(e) => setNotesOpen((e.target as HTMLDetailsElement).open)}>
-          <summary className="hh-notes-summary">
-            Add notes for {callsign} (optional){" "}
-            <kbd className="hh-kbd" aria-hidden="true">
-              N
-            </kbd>
-          </summary>
-          <label className="hh-visually-hidden" htmlFor={`${view.id}-notes`}>
-            Notes for {callsign}
-          </label>
-          <textarea
-            id={`${view.id}-notes`}
-            className="hh-textarea"
-            value={note}
-            onChange={(e) => {
-              setNote(e.target.value);
-              scheduleDraftSave(values, e.target.value, redirectMessage);
-            }}
-          />
-        </details>
+          <ol className="hh-round-questions">
+            <AdvisorRow view={view} now={now} />
+            {round.questions.map((q, i) => {
+              const lock = locks[q.id];
+              const s = suggestion?.questions[q.id];
+              let state: SuggestionState = null;
+              if (s && !lock) {
+                if (filled.has(q.id)) state = "filled";
+                else if (changed.has(q.id)) state = "changed";
+                else if (isAnswered(values[q.id]) && !sameValue(values[q.id], s.value)) state = "offer";
+              }
+              return (
+                <Question
+                  key={q.id}
+                  view={view}
+                  question={q}
+                  index={i}
+                  mode={lock ? "locked" : "open"}
+                  value={lock ? lock.value : values[q.id]}
+                  draftValue={lock ? values[q.id] : undefined}
+                  onChange={(v) => setValue(q.id, v)}
+                  current={current?.id === q.id}
+                  suggestion={s && suggestion ? { advisor: suggestion.advisor, value: s.value, ...(s.rationale ? { rationale: s.rationale } : {}) } : undefined}
+                  suggestionState={state}
+                  onAcceptSuggestion={() => s && setValue(q.id, s.value)}
+                  onCopyDraft={() => copy(draftText(view), "Draft")}
+                  now={now}
+                />
+              );
+            })}
+          </ol>
+          <details className="hh-notes" open={notesOpen} onToggle={(e) => setNotesOpen((e.target as HTMLDetailsElement).open)}>
+            <summary className="hh-notes-summary">
+              Add notes for {callsign} (optional){" "}
+              <kbd className="hh-kbd" aria-hidden="true">
+                N
+              </kbd>
+            </summary>
+            <label className="hh-visually-hidden" htmlFor={`${view.id}-notes`}>
+              Notes for {callsign}
+            </label>
+            <textarea
+              id={`${view.id}-notes`}
+              className="hh-textarea"
+              value={note}
+              onChange={(e) => {
+                setNote(e.target.value);
+                scheduleDraftSave(values, e.target.value, redirectMessage);
+              }}
+            />
+          </details>
 
-        {panel === "dismiss" ? (
-          <section className="hh-panel hh-inline-panel hh-stack" id={`${view.id}-dismiss`} aria-labelledby={`${view.id}-dismiss-h`}>
-            <h3 className="hh-heading-md" id={`${view.id}-dismiss-h`}>
-              Dismiss this Round
-            </h3>
-            <p className="hh-body-sm hh-measure">
-              {callsign} gets Outcome <strong>dismissed</strong> and no answers. Questions a policy already locked keep their policy values.
-            </p>
-            <div className="hh-field">
-              <label className="hh-label" htmlFor={`${view.id}-dismiss-note`}>
-                Note for {callsign} (optional)
-              </label>
-              <textarea
-                id={`${view.id}-dismiss-note`}
-                className="hh-textarea"
-                placeholder="For example: not needed, the flag was removed on main."
-                value={dismissNote}
-                onChange={(e) => setDismissNote(e.target.value)}
-              />
-            </div>
-            <div className="hh-row">
-              <button
-                type="button"
-                className="hh-button"
-                data-variant="destructive"
-                disabled={busy}
-                onClick={() => void act(() => dismissRound(view.id, dismissNote.trim() ? { note: dismissNote } : {}), "Round dismissed")}
-              >
-                <Icon name="x" /> Dismiss Round
-              </button>
-              <button type="button" className="hh-button" data-variant="ghost" onClick={closePanel}>
-                Keep answering
-              </button>
-            </div>
-          </section>
-        ) : null}
-
-        {panel === "redirect" ? (
-          <section className="hh-panel hh-inline-panel hh-stack" id={`${view.id}-redirect`} aria-labelledby={`${view.id}-redirect-h`}>
-            <h3 className="hh-heading-md" id={`${view.id}-redirect-h`}>
-              Redirect {callsign}
-            </h3>
-            <p className="hh-body-sm hh-measure">
-              Ends the Round with Outcome <strong>redirected</strong>. {callsign} receives your message instead of answers.
-            </p>
-            <div className="hh-field">
-              <label className="hh-label" htmlFor={`${view.id}-redirect-msg`}>
-                Do this instead (required)
-              </label>
-              <textarea
-                id={`${view.id}-redirect-msg`}
-                className="hh-textarea"
-                placeholder="For example: keep both flags, remove only legacy_nav."
-                value={redirectMessage}
-                aria-invalid={redirectInvalid || undefined}
-                aria-describedby={redirectInvalid ? `${view.id}-redirect-err` : undefined}
-                onChange={(e) => {
-                  setRedirectMessage(e.target.value);
-                  if (e.target.value.trim()) setRedirectInvalid(false);
-                  scheduleDraftSave(values, note, e.target.value);
-                }}
-              />
-              {redirectInvalid ? (
-                <p className="hh-error" id={`${view.id}-redirect-err`} role="alert">
-                  <span className="hh-badge" data-tone="destructive">
-                    Error
-                  </span>{" "}
-                  Say what {callsign} should do instead.
-                </p>
-              ) : null}
-            </div>
-            <div className="hh-row">
-              <button
-                type="button"
-                className="hh-button"
-                data-variant="primary"
-                disabled={busy}
-                onClick={() => {
-                  if (!redirectMessage.trim()) {
-                    setRedirectInvalid(true);
-                    document.getElementById(`${view.id}-redirect-msg`)?.focus();
-                    return;
-                  }
-                  void act(() => redirectRound(view.id, { message: redirectMessage, ...(note.trim() ? { note } : {}) }), "Round redirected");
-                }}
-              >
-                <Icon name="arrow-right" /> Send redirect
-              </button>
-              <button type="button" className="hh-button" data-variant="ghost" onClick={closePanel}>
-                Keep answering
-              </button>
-            </div>
-          </section>
-        ) : null}
-
-        {panel === "advisor" ? (
-          <section className="hh-panel hh-inline-panel hh-stack" id={`${view.id}-advisor`} aria-labelledby={`${view.id}-advisor-h`}>
-            <h3 className="hh-heading-md" id={`${view.id}-advisor-h`}>
-              Ask advisor
-            </h3>
-            <p className="hh-body-sm hh-measure">An Advisor reads this Round and suggests answers. It never sends: you do. Deadlines keep running while it works.</p>
-            {advisors.length === 0 ? (
+          {panel === "dismiss" ? (
+            <section className="hh-panel hh-inline-panel hh-stack" id={`${view.id}-dismiss`} aria-labelledby={`${view.id}-dismiss-h`}>
+              <h3 className="hh-heading-md" id={`${view.id}-dismiss-h`}>
+                Dismiss this Round
+              </h3>
               <p className="hh-body-sm hh-measure">
-                No Advisors are configured. Add an <span className="hh-mono-sm">[[advisor]]</span> table to config.toml; Settings shows what is loaded.
+                {callsign} gets Outcome <strong>dismissed</strong> and no answers. Questions a policy already locked keep their policy values.
               </p>
-            ) : (
-              <>
-                <fieldset className="hh-field hh-advisor-picker">
-                  <legend className="hh-label">Advisor</legend>
-                  {advisors.map((a, i) => (
-                    <label key={a.name} className="hh-radio">
-                      <input
-                        type="radio"
-                        name={`${view.id}-advisor-pick`}
-                        value={a.name}
-                        checked={(advisor || advisors[0]!.name) === a.name}
-                        onChange={() => setAdvisor(a.name)}
-                      />{" "}
-                      <span>
-                        <span className="hh-mono">{a.name}</span> <span className="hh-body-sm">· {a.timeout_seconds} s timeout</span>
-                      </span>
-                    </label>
-                  ))}
-                </fieldset>
-                <div className="hh-field">
-                  <label className="hh-label" htmlFor={`${view.id}-brief`}>
-                    Brief (optional)
-                  </label>
-                  <textarea
-                    id={`${view.id}-brief`}
-                    className="hh-textarea"
-                    aria-describedby={`${view.id}-brief-hint`}
-                    placeholder="What should the Advisor look at?"
-                    value={brief}
-                    onChange={(e) => setBrief(e.target.value)}
-                  />
-                  <p className="hh-hint" id={`${view.id}-brief-hint`}>
-                    Goes to the Advisor only, never to {callsign}.
+              <div className="hh-field">
+                <label className="hh-label" htmlFor={`${view.id}-dismiss-note`}>
+                  Note for {callsign} (optional)
+                </label>
+                <textarea
+                  id={`${view.id}-dismiss-note`}
+                  className="hh-textarea"
+                  placeholder="For example: not needed, the flag was removed on main."
+                  value={dismissNote}
+                  onChange={(e) => setDismissNote(e.target.value)}
+                />
+              </div>
+              <div className="hh-row">
+                <button
+                  type="button"
+                  className="hh-button"
+                  data-variant="destructive"
+                  disabled={busy}
+                  onClick={() => void act(() => dismissRound(view.id, dismissNote.trim() ? { note: dismissNote } : {}), "Round dismissed")}
+                >
+                  <Icon name="x" /> Dismiss Round
+                </button>
+                <button type="button" className="hh-button" data-variant="ghost" onClick={closePanel}>
+                  Keep answering
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {panel === "redirect" ? (
+            <section className="hh-panel hh-inline-panel hh-stack" id={`${view.id}-redirect`} aria-labelledby={`${view.id}-redirect-h`}>
+              <h3 className="hh-heading-md" id={`${view.id}-redirect-h`}>
+                Redirect {callsign}
+              </h3>
+              <p className="hh-body-sm hh-measure">
+                Ends the Round with Outcome <strong>redirected</strong>. {callsign} receives your message instead of answers.
+              </p>
+              <div className="hh-field">
+                <label className="hh-label" htmlFor={`${view.id}-redirect-msg`}>
+                  Do this instead (required)
+                </label>
+                <textarea
+                  id={`${view.id}-redirect-msg`}
+                  className="hh-textarea"
+                  placeholder="For example: keep both flags, remove only legacy_nav."
+                  value={redirectMessage}
+                  aria-invalid={redirectInvalid || undefined}
+                  aria-describedby={redirectInvalid ? `${view.id}-redirect-err` : undefined}
+                  onChange={(e) => {
+                    setRedirectMessage(e.target.value);
+                    if (e.target.value.trim()) setRedirectInvalid(false);
+                    scheduleDraftSave(values, note, e.target.value);
+                  }}
+                />
+                {redirectInvalid ? (
+                  <p className="hh-error" id={`${view.id}-redirect-err`} role="alert">
+                    <span className="hh-badge" data-tone="destructive">
+                      Error
+                    </span>{" "}
+                    Say what {callsign} should do instead.
                   </p>
-                </div>
-              </>
-            )}
-            <div className="hh-row">
-              {advisors.length > 0 ? (
+                ) : null}
+              </div>
+              <div className="hh-row">
                 <button
                   type="button"
                   className="hh-button"
                   data-variant="primary"
                   disabled={busy}
                   onClick={() => {
-                    setBusy(true);
-                    setError(null);
-                    askAdvisor(view.id, { advisor: advisor || advisors[0]!.name, ...(brief.trim() ? { brief } : {}) })
-                      .then(() => {
-                        closePanel();
-                        setBrief("");
-                      })
-                      .catch((err: unknown) => setError(errorText(err)))
-                      .finally(() => setBusy(false));
+                    if (!redirectMessage.trim()) {
+                      setRedirectInvalid(true);
+                      document.getElementById(`${view.id}-redirect-msg`)?.focus();
+                      return;
+                    }
+                    void act(() => redirectRound(view.id, { message: redirectMessage, ...(note.trim() ? { note } : {}) }), "Round redirected");
                   }}
                 >
-                  <Icon name="send" /> Start advisor run
+                  <Icon name="arrow-right" /> Send redirect
                 </button>
-              ) : null}
-              <button type="button" className="hh-button" data-variant="ghost" onClick={closePanel}>
-                Close
-              </button>
-            </div>
-          </section>
-        ) : null}
+                <button type="button" className="hh-button" data-variant="ghost" onClick={closePanel}>
+                  Keep answering
+                </button>
+              </div>
+            </section>
+          ) : null}
 
-        {error ? (
-          <p className="hh-error hh-round-error" role="alert">
-            <span className="hh-badge" data-tone={offline ? "expired" : "destructive"}>
-              {offline ? "Offline" : "Error"}
-            </span>{" "}
-            {error}
-          </p>
-        ) : null}
+          {panel === "advisor" ? (
+            <section className="hh-panel hh-inline-panel hh-stack" id={`${view.id}-advisor`} aria-labelledby={`${view.id}-advisor-h`}>
+              <h3 className="hh-heading-md" id={`${view.id}-advisor-h`}>
+                Ask advisor
+              </h3>
+              <p className="hh-body-sm hh-measure">An Advisor reads this Round and suggests answers. It never sends: you do. Deadlines keep running while it works.</p>
+              {advisors.length === 0 ? (
+                <p className="hh-body-sm hh-measure">
+                  No Advisors are configured. Add an <span className="hh-mono-sm">[[advisor]]</span> table to config.toml; Settings shows what is loaded.
+                </p>
+              ) : (
+                <>
+                  <fieldset className="hh-field hh-advisor-picker">
+                    <legend className="hh-label">Advisor</legend>
+                    {advisors.map((a, i) => (
+                      <label key={a.name} className="hh-radio">
+                        <input
+                          type="radio"
+                          name={`${view.id}-advisor-pick`}
+                          value={a.name}
+                          checked={(advisor || advisors[0]!.name) === a.name}
+                          onChange={() => setAdvisor(a.name)}
+                        />{" "}
+                        <span>
+                          <span className="hh-mono">{a.name}</span> <span className="hh-body-sm">· {a.timeout_seconds} s timeout</span>
+                        </span>
+                      </label>
+                    ))}
+                  </fieldset>
+                  <div className="hh-field">
+                    <label className="hh-label" htmlFor={`${view.id}-brief`}>
+                      Brief (optional)
+                    </label>
+                    <textarea
+                      id={`${view.id}-brief`}
+                      className="hh-textarea"
+                      aria-describedby={`${view.id}-brief-hint`}
+                      placeholder="What should the Advisor look at?"
+                      value={brief}
+                      onChange={(e) => setBrief(e.target.value)}
+                    />
+                    <p className="hh-hint" id={`${view.id}-brief-hint`}>
+                      Goes to the Advisor only, never to {callsign}.
+                    </p>
+                  </div>
+                </>
+              )}
+              <div className="hh-row">
+                {advisors.length > 0 ? (
+                  <button
+                    type="button"
+                    className="hh-button"
+                    data-variant="primary"
+                    disabled={busy}
+                    onClick={() => {
+                      setBusy(true);
+                      setError(null);
+                      askAdvisor(view.id, { advisor: advisor || advisors[0]!.name, ...(brief.trim() ? { brief } : {}) })
+                        .then(() => {
+                          closePanel();
+                          setBrief("");
+                        })
+                        .catch((err: unknown) => setError(errorText(err)))
+                        .finally(() => setBusy(false));
+                    }}
+                  >
+                    <Icon name="send" /> Start advisor run
+                  </button>
+                ) : null}
+                <button type="button" className="hh-button" data-variant="ghost" onClick={closePanel}>
+                  Close
+                </button>
+              </div>
+            </section>
+          ) : null}
 
-        <div className="hh-answer-bar" data-sticky="true">
-          <div className="hh-answer-bar-row">
-            <span className="hh-answer-progress">
-              <span className="hh-mono-sm">
-                {requiredDone} of {required.length} required answered
+          {error ? (
+            <p className="hh-error hh-round-error" role="alert">
+              <span className="hh-badge" data-tone={offline ? "expired" : "destructive"}>
+                {offline ? "Offline" : "Error"}
+              </span>{" "}
+              {error}
+            </p>
+          ) : null}
+
+          <div className="hh-answer-bar" data-sticky="true">
+            <div className="hh-answer-bar-row">
+              <span className="hh-answer-progress">
+                <span className="hh-mono-sm">
+                  {requiredDone} of {required.length} required answered
+                </span>
               </span>
-            </span>
-            <span className="hh-row">
-              {(
-                [
-                  ["advisor", view.advisor_runs.length ? "Ask advisor again" : "Ask advisor", "v"],
-                  ["redirect", "Redirect", "e"],
-                  ["dismiss", "Dismiss", "d"],
-                ] as const
-              ).map(([p, label, key]) => (
+              <span className="hh-row">
+                {(
+                  [
+                    ["advisor", view.advisor_runs.length ? "Ask advisor again" : "Ask advisor", "v"],
+                    ["redirect", "Redirect", "e"],
+                    ["dismiss", "Dismiss", "d"],
+                  ] as const
+                ).map(([p, label, key]) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className="hh-button"
+                    aria-expanded={panel === p}
+                    aria-controls={`${view.id}-${p}`}
+                    aria-keyshortcuts={key}
+                    onClick={() => (panel === p ? closePanel() : openPanel(p))}
+                  >
+                    {label}{" "}
+                    <kbd className="hh-kbd" aria-hidden="true">
+                      {key}
+                    </kbd>
+                  </button>
+                ))}
                 <button
-                  key={p}
-                  type="button"
+                  type="submit"
                   className="hh-button"
-                  aria-expanded={panel === p}
-                  aria-controls={`${view.id}-${p}`}
-                  aria-keyshortcuts={key}
-                  onClick={() => (panel === p ? closePanel() : openPanel(p))}
+                  data-variant="primary"
+                  aria-keyshortcuts="Meta+Enter Control+Enter"
+                  aria-disabled={offline || busy || undefined}
                 >
-                  {label}{" "}
+                  <Icon name="send" /> Send Answer{" "}
                   <kbd className="hh-kbd" aria-hidden="true">
-                    {key}
+                    ⌘↵
                   </kbd>
+                  <span className="hh-visually-hidden">Command Enter</span>
                 </button>
-              ))}
-              <button
-                type="submit"
-                className="hh-button"
-                data-variant="primary"
-                aria-keyshortcuts="Meta+Enter Control+Enter"
-                aria-disabled={offline || busy || undefined}
-              >
-                <Icon name="send" /> Send Answer{" "}
-                <kbd className="hh-kbd" aria-hidden="true">
-                  ⌘↵
-                </kbd>
-                <span className="hh-visually-hidden">Command Enter</span>
-              </button>
-            </span>
+              </span>
+            </div>
           </div>
-        </div>
         </div>
       </form>
     </RoundStrip>

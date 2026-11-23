@@ -259,86 +259,86 @@ export function Log() {
         <span className="hh-mono">{plural(all.length, "ended Round")}</span>
       </div>
       <div className="hh-tray hh-filter-tray" data-density="compact">
-          <div className="hh-field">
-            <label className="hh-label" htmlFor="log-search">
-              Search
-            </label>
-            <input
-              id="log-search"
-              className="hh-input"
-              type="search"
-              value={searchInput}
-              placeholder="Titles, Questions, answers, notes"
-              aria-describedby="log-search-hint"
-              onChange={(e) => setSearchInput(e.target.value)}
-            />
-            <p className="hh-hint" id="log-search-hint">
-              Full-text over Round titles and context, Question prompts, options, free-text answers, notes and redirect messages. Attachment contents
-              are not indexed.
-            </p>
-          </div>
-          <div role="group" aria-label="Filter by Outcome" className="hh-row">
-            {OUTCOMES.map((o) => (
-              <button key={o} type="button" className="hh-chip" aria-pressed={outcome === o} onClick={() => setOutcome(outcome === o ? undefined : o)}>
-                {OUTCOME_WORDS[o]}
+        <div className="hh-field">
+          <label className="hh-label" htmlFor="log-search">
+            Search
+          </label>
+          <input
+            id="log-search"
+            className="hh-input"
+            type="search"
+            value={searchInput}
+            placeholder="Titles, Questions, answers, notes"
+            aria-describedby="log-search-hint"
+            onChange={(e) => setSearchInput(e.target.value)}
+          />
+          <p className="hh-hint" id="log-search-hint">
+            Full-text over Round titles and context, Question prompts, options, free-text answers, notes and redirect messages. Attachment contents
+            are not indexed.
+          </p>
+        </div>
+        <div role="group" aria-label="Filter by Outcome" className="hh-row">
+          {OUTCOMES.map((o) => (
+            <button key={o} type="button" className="hh-chip" aria-pressed={outcome === o} onClick={() => setOutcome(outcome === o ? undefined : o)}>
+              {OUTCOME_WORDS[o]}
+            </button>
+          ))}
+        </div>
+        {allCallsigns.length > 0 ? (
+          <div role="group" aria-label="Filter by callsign" className="hh-row">
+            {allCallsigns.map((c) => (
+              <button key={c} type="button" className="hh-chip" aria-pressed={callsign === c} onClick={() => setCallsign(callsign === c ? undefined : c)}>
+                <Callsign name={c} />
               </button>
             ))}
           </div>
-          {allCallsigns.length > 0 ? (
-            <div role="group" aria-label="Filter by callsign" className="hh-row">
-              {allCallsigns.map((c) => (
-                <button key={c} type="button" className="hh-chip" aria-pressed={callsign === c} onClick={() => setCallsign(callsign === c ? undefined : c)}>
-                  <Callsign name={c} />
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {allProjects.length > 0 ? (
-            <div role="group" aria-label="Filter by project" className="hh-row">
-              {allProjects.map((p) => (
-                <button key={p} type="button" className="hh-chip" aria-pressed={project === p} title={p} onClick={() => setProject(project === p ? undefined : p)}>
-                  {projectLabel(p)}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <div role="group" aria-label="Filter by date range" className="hh-row">
-            {RANGES.map(([r, label]) => (
-              <button key={r} type="button" className="hh-chip" aria-pressed={range === r} onClick={() => setRange(r)}>
-                {label}
+        ) : null}
+        {allProjects.length > 0 ? (
+          <div role="group" aria-label="Filter by project" className="hh-row">
+            {allProjects.map((p) => (
+              <button key={p} type="button" className="hh-chip" aria-pressed={project === p} title={p} onClick={() => setProject(project === p ? undefined : p)}>
+                {projectLabel(p)}
               </button>
             ))}
           </div>
-          {range === "custom" ? (
-            <div className="hh-field-pair">
-              <div className="hh-field">
-                <label className="hh-label" htmlFor="log-from">
-                  From
-                </label>
-                <input id="log-from" className="hh-input hh-mono" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-              </div>
-              <div className="hh-field">
-                <label className="hh-label" htmlFor="log-to">
-                  To
-                </label>
-                <input id="log-to" className="hh-input hh-mono" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-              </div>
+        ) : null}
+        <div role="group" aria-label="Filter by date range" className="hh-row">
+          {RANGES.map(([r, label]) => (
+            <button key={r} type="button" className="hh-chip" aria-pressed={range === r} onClick={() => setRange(r)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {range === "custom" ? (
+          <div className="hh-field-pair">
+            <div className="hh-field">
+              <label className="hh-label" htmlFor="log-from">
+                From
+              </label>
+              <input id="log-from" className="hh-input hh-mono" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
             </div>
-          ) : null}
-          <div className="hh-filter-tray-actions">
-            <span className="hh-mono-sm" role="status">
-              {entries === null ? "Loading…" : shown.length ? `Showing ${shown.length} of ${all.length}` : "No Rounds match · Clear filters"}
-            </span>
-            {hasFilters ? (
-              <button type="button" className="hh-button" data-variant="ghost" data-size="sm" onClick={clearFilters}>
-                Clear filters
-              </button>
-            ) : null}
-            <a className="hh-button" data-size="sm" href={logExportUrl(filter)}>
-              <Icon name="file" /> Export JSON
-            </a>
-            <span className="hh-mono-sm">hermes-log-{localDay(new Date().toISOString())}.json · the filtered log</span>
+            <div className="hh-field">
+              <label className="hh-label" htmlFor="log-to">
+                To
+              </label>
+              <input id="log-to" className="hh-input hh-mono" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+            </div>
           </div>
+        ) : null}
+        <div className="hh-filter-tray-actions">
+          <span className="hh-mono-sm" role="status">
+            {entries === null ? "Loading…" : shown.length ? `Showing ${shown.length} of ${all.length}` : "No Rounds match · Clear filters"}
+          </span>
+          {hasFilters ? (
+            <button type="button" className="hh-button" data-variant="ghost" data-size="sm" onClick={clearFilters}>
+              Clear filters
+            </button>
+          ) : null}
+          <a className="hh-button" data-size="sm" href={logExportUrl(filter)}>
+            <Icon name="file" /> Export JSON
+          </a>
+          <span className="hh-mono-sm">hermes-log-{localDay(new Date().toISOString())}.json · the filtered log</span>
+        </div>
       </div>
       {error ? (
         <p className="hh-error" role="alert">
