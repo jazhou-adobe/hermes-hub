@@ -78,8 +78,8 @@ Each error has a stable `code`. Over HTTP it is sent as `application/problem+jso
 
 Two hosts, one tool set:
 
-- **`hermes mcp`**, a stdio shim that proxies to HTTP. This is the default. It has no first-byte timer, it inherits the Agent's environment for identity detection, and it uses the same cached session token as the CLI.
-- **`/mcp`** on the Hub, Streamable HTTP on revision 2026-07-28, legacy-stateless for 2025-11-25 clients, loopback only. It serves clients that prefer a URL. Identity comes from `clientInfo` and per-call `_meta`, and the session token from `POST /v1/sessions`.
+- **`hermes mcp`**, a stdio shim that proxies to HTTP. This is the default. It has no first-byte timer, it inherits the Agent's environment for identity detection, and, like the CLI, it calls `POST /v1/sessions` for the detected identity (on every tool call, since it re-detects per call; [agent-identity.md](agent-identity.md)), keeping the token in memory.
+- **`/mcp`** on the Hub, Streamable HTTP on revision 2026-07-28, legacy-stateless for 2025-era clients (2025-11-25 and the earlier 2025 revisions, such as the 2025-06-18 that Codex 0.133 sends), loopback only. It serves clients that prefer a URL. Identity comes from `clientInfo` and per-call `_meta`, and the session token from `POST /v1/sessions`.
 
 | Tool | Input | Behaviour |
 |---|---|---|
@@ -91,6 +91,13 @@ Two hosts, one tool set:
 - **Errors:** a tool result with `isError: true` and `structuredContent: {code, ...}` using the same codes.
 - **Delivery:** a Tasks Answer counts as delivered on the first `tasks/get` that returns it as `completed`.
 - **Not in Phase 1:** URL-mode and form-mode elicitation.
+- **Pinned at implementation ([S7](https://github.com/jazhou-adobe/hermes-hub/issues/29)):**
+  - Both hosts negotiate 2026-07-28 or any 2025 revision (the stdio shim pins the era per connection). The Tasks extension is declared in the server capabilities and honoured only on a 2026-07-28 request that declares it in its own `clientCapabilities`.
+  - The blocking wait sends `notifications/progress` every 10 s when the call carries a `progressToken`.
+  - A task is `{taskId, status, createdAt, lastUpdatedAt, ttlMs: null, pollIntervalMs: 5000}`. A Round cancelled by its Agent reads `cancelled`; every other ended Round reads `completed` with the Answer as the tool result.
+  - `tasks/cancel` always acknowledges with `{}`, also when the Round had already ended. An unknown or foreign Round is `-32602`; a request that does not declare Tasks is `-32021`; other Hub errors are `-32603` with `data: {code, ...}`.
+  - `hermes_wait` and `hermes_cancel` without a `round_id` fail with `not_found`; `hermes_ask` without a `round` object fails with `invalid_round`.
+  - The text content of each result repeats the structured one (`ERROR <code> <message>` for errors, as on the CLI).
 
 ## CLI (`hermes`)
 

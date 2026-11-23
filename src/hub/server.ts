@@ -1,6 +1,8 @@
 import type { BuildArtifact, Server } from "bun";
 import { join } from "node:path";
 import { HTTP_STATUS, HubError } from "../errors.ts";
+import { hubMcpHandler } from "../mcp/hub.ts";
+import { realTimers, type Timers } from "../mcp/tools.ts";
 import { CLONE_ROOT } from "../paths.ts";
 import type { Answer, Outcome } from "../schema/types.ts";
 import type { Engine, HubEvent, LogFilter } from "./engine.ts";
@@ -137,6 +139,8 @@ export async function startServer(
   logger: Logger = noopLogger,
   /** The macOS fallback (hub-operations spec); it needs to know whether a Command Center tab is open. */
   notifier?: Notifier,
+  /** Bounds `/mcp`'s blocking waits; tests pass fake timers. */
+  mcpTimers: Timers = realTimers,
 ): Promise<Server<undefined>> {
   const session = (req: Request) => engine.sessionFor(req.headers.get("Hermes-Session"));
   const development = process.env.NODE_ENV === "development";
@@ -162,6 +166,13 @@ export async function startServer(
       return res;
     };
   }
+
+  const mcp = hubMcpHandler(engine, mcpTimers);
+  /** `/mcp` behind the browser guard (security spec). A tool call may block for 50 s, past Bun's idle timeout. */
+  const mcpRoute = handle((req, server) => {
+    server.timeout(req, 0);
+    return mcp.fetch(req);
+  });
 
   let ui: Record<string, unknown>;
   if (development) {
@@ -266,6 +277,9 @@ export async function startServer(
           });
         }),
       },
+
+      // MCP over Streamable HTTP (transports spec); the stdio shim `hermes mcp` is the default door.
+      "/mcp": { POST: mcpRoute, GET: mcpRoute },
 
       // Command Center endpoints (internal; never documented to Agents)
       "/cc/rounds": { GET: handle(() => Response.json({ rounds: engine.feed() })) },
