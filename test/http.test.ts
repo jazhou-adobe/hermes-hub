@@ -184,3 +184,30 @@ describe("browser guard (security spec)", () => {
     expect(res.headers.get("access-control-allow-origin")).toBeNull();
   });
 });
+
+describe("Agent roster endpoints", () => {
+  test("GET /cc/agents lists a session that has contacted the Hub", async () => {
+    const { url } = await up();
+    await openSession(url);
+    const res = await fetch(`${url}/cc/agents`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.agents).toHaveLength(1);
+    expect(body.agents[0]).toMatchObject({ kind: "script", liveness: "live" });
+  });
+
+  test("POST /cc/agents/:id/forget hides the session and cancels its pending Rounds", async () => {
+    const { url } = await up();
+    const token = await openSession(url);
+    const headers = { "Content-Type": "application/json", "Hermes-Session": token };
+    await fetch(`${url}/v1/rounds`, { method: "POST", headers, body: JSON.stringify(ROUND) });
+    const agents = await (await fetch(`${url}/cc/agents`)).json();
+    const id = agents.agents[0].id;
+    const forget = await fetch(`${url}/cc/agents/${id}/forget`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    expect(forget.status).toBe(200);
+    expect((await (await fetch(`${url}/cc/agents`)).json()).agents).toHaveLength(0);
+    // The cancelled Round stays in the Feed, ended in place (lifecycle spec), until removed.
+    const rounds = (await (await fetch(`${url}/cc/rounds`)).json()).rounds;
+    expect(rounds).toMatchObject([{ status: "cancelled" }]);
+  });
+});

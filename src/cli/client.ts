@@ -35,6 +35,7 @@ export class HubClient {
         `cannot reach the Hub at ${this.baseUrl}. Start it with \`hermes hub\`; a sandboxed Agent needs the Hub Skill's sandbox setup`,
       );
     }
+    if (!res.ok) throw await this.toHubError(res);
     let data: unknown;
     try {
       data = await res.json();
@@ -42,11 +43,20 @@ export class HubClient {
       throw new HubError("internal", `the Hub sent HTTP ${res.status} without a JSON body`);
     }
     if (!isRecord(data)) throw new HubError("internal", `the Hub sent HTTP ${res.status} with a non-object body`);
-    if (!res.ok) {
-      const { code, detail, type: _type, title: _title, status: _status, ...extra } = data;
-      throw new HubError(typeof code === "string" ? code : "internal", typeof detail === "string" ? detail : `HTTP ${res.status}`, extra);
-    }
     return data;
+  }
+
+  /** Converts a failed response's RFC 9457 problem body into a HubError carrying the stable `code`. */
+  private async toHubError(res: Response): Promise<HubError> {
+    let data: unknown;
+    try {
+      data = await res.json();
+    } catch {
+      return new HubError("internal", `the Hub sent HTTP ${res.status} without a JSON body`);
+    }
+    if (!isRecord(data)) return new HubError("internal", `the Hub sent HTTP ${res.status} with a non-object body`);
+    const { code, detail, type: _type, title: _title, status: _status, ...extra } = data;
+    return new HubError(typeof code === "string" ? code : "internal", typeof detail === "string" ? detail : `HTTP ${res.status}`, extra);
   }
 
   /** `POST /v1/sessions`; the token lives in memory only. */
@@ -102,6 +112,47 @@ export class HubClient {
       unreachableSince = undefined;
       backoffMs = 500;
       if (res.status !== "pending") return asAnswer(res);
+    }
+  }
+
+  /**
+   * events: streams the caller's Round endings and hands each one to `onAnswer`, in order. Resolves
+   * once the connection closes; the caller decides whether to reconnect.
+   */
+  async watch(onAnswer: (answer: Answer) => void, signal?: AbortSignal): Promise<void> {
+    let res: Response;
+    try {
+      res = await fetch(`${this.baseUrl}/v1/events`, {
+        headers: { ...(this.token ? { "Hermes-Session": this.token } : {}) },
+        signal,
+      });
+    } catch {
+      throw new HubError(
+        "hub_unavailable",
+        `cannot reach the Hub at ${this.baseUrl}. Start it with \`hermes hub\`; a sandboxed Agent needs the Hub Skill's sandbox setup`,
+      );
+    }
+    if (!res.ok) throw await this.toHubError(res);
+    if (!res.body) throw new HubError("internal", "the Hub sent /v1/events without a body");
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      buffer += decoder.decode(value, { stream: true });
+      let boundary: number;
+      while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+        const block = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        let event: string | undefined;
+        let data: string | undefined;
+        for (const line of block.split("\n")) {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          else if (line.startsWith("data:")) data = line.slice(5).trim();
+        }
+        if (event === "round.ended" && data !== undefined) onAnswer(asAnswer(JSON.parse(data)));
+      }
     }
   }
 }

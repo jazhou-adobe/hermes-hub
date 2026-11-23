@@ -23,6 +23,7 @@ export function Nav() {
     <nav className="nav">
       <NavLink to="/">Feed</NavLink>
       <NavLink to="/log">Log</NavLink>
+      <NavLink to="/agents">Agents</NavLink>
     </nav>
   );
 }

@@ -2,11 +2,12 @@ import type { BuildArtifact, Server } from "bun";
 import { join } from "node:path";
 import { HTTP_STATUS, HubError } from "../errors.ts";
 import { CLONE_ROOT } from "../paths.ts";
-import type { Outcome } from "../schema/types.ts";
+import type { Answer, Outcome } from "../schema/types.ts";
 import type { Engine, HubEvent, LogFilter } from "./engine.ts";
+import { noopLogger, type Logger } from "./log.ts";
 import devCommandCenter from "../../web/index.html";
 
-const HEARTBEAT_MS = 15_000;
+export const HEARTBEAT_MS = 15_000;
 const CSP = "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'";
 const JSON_TYPE = /^application\/json\s*(;|$)/i;
 
@@ -43,22 +44,6 @@ function guard(req: Request, port: number): void {
 
 type Handler<P extends string> = (req: Bun.BunRequest<P>, server: Server<undefined>) => Response | Promise<Response>;
 
-/** Runs the guard, maps HubErrors to RFC 9457 problems (anything else is a 500), and adds nosniff. */
-function handle<P extends string>(fn: Handler<P>): Handler<P> {
-  return async (req, server) => {
-    let res: Response;
-    try {
-      guard(req, server.port!);
-      res = await fn(req, server);
-    } catch (err) {
-      if (!(err instanceof HubError)) console.error(err);
-      res = problem(err instanceof HubError ? err : new HubError("internal", "internal error"));
-    }
-    res.headers.set("X-Content-Type-Options", "nosniff");
-    return res;
-  };
-}
-
 async function jsonBody(req: Request, code: string): Promise<unknown> {
   try {
     return await req.json();
@@ -71,14 +56,20 @@ function forbidAdvisor(req: Request): void {
   if (req.headers.has("Hermes-Advisor")) throw new HubError("advisor_cannot_ask", "an Advisor run cannot ask the Human");
 }
 
-/** A Server-Sent Events response fed by `start`, with a comment heartbeat. */
-function sse(req: Request, server: Server<undefined>, start: (send: (event: string, data: unknown) => void) => () => void) {
+/** A Server-Sent Events response fed by `start`, with a comment heartbeat every `heartbeatMs`. */
+export function sse(
+  req: Request,
+  server: Server<undefined>,
+  start: (send: (event: string, data: unknown, id?: string) => void) => () => void,
+  heartbeatMs = HEARTBEAT_MS,
+) {
   server.timeout(req, 0);
   let stop = () => {};
   const stream = new ReadableStream<string>({
     start(controller) {
-      const send = (event: string, data: unknown) => controller.enqueue(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-      const heartbeat = setInterval(() => controller.enqueue(": heartbeat\n\n"), HEARTBEAT_MS);
+      const send = (event: string, data: unknown, id?: string) =>
+        controller.enqueue(`${id === undefined ? "" : `id: ${id}\n`}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      const heartbeat = setInterval(() => controller.enqueue(": heartbeat\n\n"), heartbeatMs);
       const unsubscribe = start(send);
       stop = () => {
         clearInterval(heartbeat);
@@ -138,16 +129,38 @@ function parseLogFilter(url: URL): LogFilter {
   return filter;
 }
 
-export async function startServer(engine: Engine, port: number): Promise<Server<undefined>> {
+export async function startServer(engine: Engine, port: number, logger: Logger = noopLogger): Promise<Server<undefined>> {
   const session = (req: Request) => engine.sessionFor(req.headers.get("Hermes-Session"));
   const development = process.env.NODE_ENV === "development";
+
+  /** Runs the guard, maps HubErrors to RFC 9457 problems (anything else is a 500), logs, and adds nosniff. */
+  function handle<P extends string>(fn: Handler<P>): Handler<P> {
+    return async (req, server) => {
+      const path = new URL(req.url).pathname;
+      const started = performance.now();
+      let res: Response;
+      try {
+        guard(req, server.port!);
+        res = await fn(req, server);
+      } catch (err) {
+        const hubErr = err instanceof HubError ? err : new HubError("internal", "internal error");
+        if (!(err instanceof HubError)) {
+          logger.log("error", "http.error", { method: req.method, path, error: err instanceof Error ? err.message : String(err) });
+        }
+        res = problem(hubErr);
+      }
+      logger.log("info", "http.request", { method: req.method, path, status: res.status, duration_ms: Math.round(performance.now() - started) });
+      res.headers.set("X-Content-Type-Options", "nosniff");
+      return res;
+    };
+  }
 
   let ui: Record<string, unknown>;
   if (development) {
     // Bun's HTML import with hot reload; it resolves bundled asset URLs against the cwd.
     // The guard and CSP do not cover these UI routes in development.
     process.chdir(CLONE_ROOT);
-    ui = { "/": devCommandCenter, "/rounds/:id": devCommandCenter, "/log": devCommandCenter };
+    ui = { "/": devCommandCenter, "/rounds/:id": devCommandCenter, "/log": devCommandCenter, "/agents": devCommandCenter };
   } else {
     const { index, assets } = await buildCommandCenter();
     const page = handle(() => new Response(index, { headers: { "Content-Type": index.type, "Content-Security-Policy": CSP } }));
@@ -155,6 +168,7 @@ export async function startServer(engine: Engine, port: number): Promise<Server<
       "/": { GET: page },
       "/rounds/:id": { GET: page },
       "/log": { GET: page },
+      "/agents": { GET: page },
       "/assets/:file": {
         GET: handle<"/assets/:file">((req) => {
           const asset = assets.get(req.params.file);
@@ -214,6 +228,29 @@ export async function startServer(engine: Engine, port: number): Promise<Server<
           return Response.json({ answers: engine.inbox(session(req), limit) });
         }),
       },
+      "/v1/events": {
+        GET: handle((req, server) => {
+          const s = session(req);
+          const header = req.headers.get("Last-Event-ID");
+          const parsed = header === null ? NaN : Number(header);
+          const cursor = Number.isFinite(parsed) ? parsed : null;
+          return sse(req, server, (send) => {
+            for (const { id, answer } of engine.eventsSince(s, cursor)) send("round.ended", answer, String(id));
+            return engine.subscribe((e: HubEvent) => {
+              if (e.type !== "round.ended") return;
+              let answer: Answer;
+              try {
+                const result = engine.get(s, e.round_id);
+                if (!("outcome" in result)) return; // defensive: it just ended, so this should never be pending
+                answer = result;
+              } catch {
+                return; // another session's Round
+              }
+              send("round.ended", answer, String(engine.eventCursor(e.round_id)));
+            });
+          });
+        }),
+      },
 
       // Command Center endpoints (internal; never documented to Agents)
       "/cc/rounds": { GET: handle(() => Response.json({ rounds: engine.feed() })) },
@@ -241,6 +278,30 @@ export async function startServer(engine: Engine, port: number): Promise<Server<
       "/cc/rounds/:id/remove": {
         POST: handle<"/cc/rounds/:id/remove">((req) => {
           engine.removeFromFeed(req.params.id);
+          return Response.json({ ok: true });
+        }),
+      },
+      "/cc/agents": { GET: handle(() => Response.json({ agents: engine.roster() })) },
+      "/cc/agents/:id/forget": {
+        POST: handle<"/cc/agents/:id/forget">((req) => {
+          engine.forget(req.params.id);
+          return Response.json({ ok: true });
+        }),
+      },
+      "/cc/advisors": { GET: handle(() => Response.json({ advisors: engine.advisorNames() })) },
+      "/cc/rounds/:id/advisor": {
+        POST: handle<"/cc/rounds/:id/advisor">(async (req) => {
+          const body = (await jsonBody(req, "invalid_answer")) as { advisor?: unknown; brief?: unknown };
+          if (typeof body.advisor !== "string" || !body.advisor) {
+            throw new HubError("invalid_answer", "advisor is required");
+          }
+          const brief = typeof body.brief === "string" && body.brief.trim() ? body.brief : undefined;
+          return Response.json(engine.askAdvisor(req.params.id, body.advisor, brief, "manual"));
+        }),
+      },
+      "/cc/rounds/:id/advisor/cancel": {
+        POST: handle<"/cc/rounds/:id/advisor/cancel">((req) => {
+          engine.cancelAdvisor(req.params.id);
           return Response.json({ ok: true });
         }),
       },
