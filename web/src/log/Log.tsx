@@ -52,7 +52,7 @@ function renderSnippet(snippet: string): ReactNode {
       return null;
     }
     return marking ? (
-      <mark key={i} className="pv-match">
+      <mark key={i} className="hh-match">
         {part}
       </mark>
     ) : (
@@ -127,14 +127,14 @@ function LogTable({ label, entries }: { label: string; entries: LogEntry[] }) {
                   </span>
                 </td>
                 <td>
-                  <ul className="pv-values">
+                  <ul className="hh-log-values">
                     {round.questions.map((q, i) => {
                       const qa = answer.questions[q.id];
                       const draft = entry.draft?.questions?.[q.id]?.value;
                       return (
                         <li key={q.id}>
                           <span className="hh-mono-sm">Q{i + 1}</span> <span>{describeValue(q, qa?.value ?? draft)}</span>{" "}
-                          <span className="hh-body-sm pv-setter">· {qa && qa.set_by !== "none" ? formatSetter(qa) : draft != null ? "Draft · Not sent" : "Not set"}</span>
+                          <span className="hh-body-sm hh-log-setter">· {qa && qa.set_by !== "none" ? formatSetter(qa) : draft != null ? "Draft · Not sent" : "Not set"}</span>
                         </li>
                       );
                     })}
@@ -158,7 +158,7 @@ function LogTable({ label, entries }: { label: string; entries: LogEntry[] }) {
                     aria-label={`Copy as Markdown ${meta.round_id}`}
                     onClick={() => copy(entryMarkdown(entry), "Markdown")}
                   >
-                    <Icon name="file" /> Copy as Markdown
+                    <Icon name="copy" /> Copy as Markdown
                   </button>
                 </td>
               </tr>
@@ -251,15 +251,14 @@ export function Log() {
 
   const shown = entries ?? [];
   return (
-    <section className="pv-surface" aria-labelledby="log-h">
-      <div className="pv-page-head">
+    <section className="hh-page" aria-labelledby="log-h">
+      <div className="hh-page-head">
         <h1 className="hh-heading-lg" id="log-h">
           Answered log
         </h1>
         <span className="hh-mono">{plural(all.length, "ended Round")}</span>
       </div>
-      <div className="hh-tray pv-filters" data-density="compact">
-        <div className="pv-filter-grid">
+      <div className="hh-tray hh-filter-tray" data-density="compact">
           <div className="hh-field">
             <label className="hh-label" htmlFor="log-search">
               Search
@@ -311,7 +310,7 @@ export function Log() {
             ))}
           </div>
           {range === "custom" ? (
-            <div className="pv-time-row">
+            <div className="hh-field-pair">
               <div className="hh-field">
                 <label className="hh-label" htmlFor="log-from">
                   From
@@ -326,7 +325,7 @@ export function Log() {
               </div>
             </div>
           ) : null}
-          <div className="hh-row pv-filter-actions">
+          <div className="hh-filter-tray-actions">
             <span className="hh-mono-sm" role="status">
               {entries === null ? "Loading…" : shown.length ? `Showing ${shown.length} of ${all.length}` : "No Rounds match · Clear filters"}
             </span>
@@ -340,7 +339,6 @@ export function Log() {
             </a>
             <span className="hh-mono-sm">hermes-log-{localDay(new Date().toISOString())}.json · the filtered log</span>
           </div>
-        </div>
       </div>
       {error ? (
         <p className="hh-error" role="alert">

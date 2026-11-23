@@ -31,7 +31,7 @@ function AgentState({ agent }: { agent: AgentView }) {
 function CopyButton({ text, label }: { text: string; label: string }) {
   return (
     <button type="button" className="hh-button" data-variant="ghost" data-size="sm" aria-label={label} onClick={() => copy(text, label.replace(/^Copy /, ""))}>
-      <Icon name="file" /> Copy
+      <Icon name="copy" /> Copy
     </button>
   );
 }
@@ -90,8 +90,8 @@ function AgentCard({ agent, onForget }: { agent: AgentView; onForget: (a: AgentV
           )}
         </dd>
       </dl>
-      <details className="pv-detect">
-        <summary className="hh-notes-summary">Detection details</summary>
+      <details className="hh-detection">
+        <summary className="hh-detection-summary">Detection details</summary>
         <dl className="hh-dl">
           <dt>Label</dt>
           <dd>
@@ -136,7 +136,7 @@ function AgentCard({ agent, onForget }: { agent: AgentView; onForget: (a: AgentV
                 <span className="hh-badge" data-tone="warning">
                   <Icon name="alert" /> Undocumented signal
                 </span>
-                <div className="pv-popover-anchor">
+                <div className="hh-popover-anchor">
                   <button
                     type="button"
                     className="hh-button"
@@ -187,7 +187,7 @@ function AgentCard({ agent, onForget }: { agent: AgentView; onForget: (a: AgentV
       </details>
       <div className="hh-row">
         <button type="button" className="hh-button" data-size="sm" aria-haspopup="dialog" aria-label={`Forget ${agent.callsign}`} onClick={() => onForget(agent)}>
-          <Icon name="x" /> Forget
+          <Icon name="trash" /> Forget
         </button>
       </div>
     </li>
@@ -244,24 +244,24 @@ function Lanes({ agents, rounds }: { agents: AgentView[]; rounds: FeedRoundView[
         One lane per Agent session, with its Pending Rounds. Selecting a strip opens the Round in the drawer beside the lanes; Open in Feed jumps to it in
         the Feed.
       </p>
-      <div className="pv-lanes-layout">
-        <ul className="pv-lanes" aria-label="Lanes">
+      <div className="hh-lanes-layout">
+        <ul className="hh-lanes" aria-label="Lanes">
           {agents.map((a) => {
             const lane = rounds.filter((r) => r.session.id === a.id && r.status === "pending");
             return (
-              <li key={a.id} className="hh-shelf pv-lane" aria-label={`Lane ${a.callsign}`}>
-                <div className="pv-lane-head">
+              <li key={a.id} className="hh-shelf hh-lane" aria-label={`Lane ${a.callsign}`}>
+                <div className="hh-lane-head">
                   <Callsign name={a.callsign} />
                   <AgentState agent={a} />
                   <span className="hh-mono">{lane.length} pending</span>
                   <span className="hh-mono-sm">Last seen {hhmmss(a.last_seen)}</span>
                   {a.git?.branch ? <span className="hh-mono-sm">{a.git.branch}</span> : null}
                 </div>
-                <ul className="hh-strip-bay-list pv-lane-list" aria-label={`Pending Rounds of ${a.callsign}`}>
+                <ul className="hh-strip-bay-list hh-lane-list" aria-label={`Pending Rounds of ${a.callsign}`}>
                   {lane.length ? (
                     lane.map((r) => <LaneStrip key={r.id} view={r} now={now} selected={r.id === selected} onSelect={() => setSelected(r.id === selected ? null : r.id)} />)
                   ) : (
-                    <li className="hh-strip-bay-slot pv-slot">
+                    <li className="hh-strip-bay-slot hh-lane-slot">
                       <p className="hh-body-sm">
                         No pending Rounds · {a.callsign} is {a.liveness === "live" ? "Live" : a.liveness === "idle" ? "Idle" : "Gone"}
                       </p>
@@ -272,7 +272,7 @@ function Lanes({ agents, rounds }: { agents: AgentView[]; rounds: FeedRoundView[
             );
           })}
         </ul>
-        <aside className="hh-panel pv-drawer" id="lane-drawer" aria-labelledby="drawer-h">
+        <aside className="hh-drawer" id="lane-drawer" aria-labelledby="drawer-h">
           <div className="hh-overlay-head">
             <h2 className="hh-heading-md" id="drawer-h">
               Round drawer
@@ -390,8 +390,8 @@ export function Agents() {
 
   const pendingOf = forgetting ? rounds.filter((r) => r.session.id === forgetting.id && r.status === "pending").length : 0;
   return (
-    <section className="pv-surface" aria-labelledby="agents-h">
-      <div className="pv-page-head">
+    <section className="hh-page" aria-labelledby="agents-h">
+      <div className="hh-page-head">
         <h1 className="hh-heading-lg" id="agents-h" tabIndex={-1}>
           Agents <span className="hh-mono">· {agents.length}</span>
         </h1>
@@ -489,7 +489,7 @@ export function Agents() {
             Keep {forgetting?.callsign}
           </button>
           <button type="button" className="hh-button" data-variant="destructive" onClick={confirm}>
-            <Icon name="x" /> Forget {forgetting?.callsign}
+            <Icon name="trash" /> Forget {forgetting?.callsign}
           </button>
         </div>
       </dialog>

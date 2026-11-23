@@ -76,7 +76,12 @@ Use the [GLOSSARY](https://github.com/jazhou-adobe/hermes-hub/blob/main/GLOSSARY
 |---|---|---|
 | **Strip** | One Round on the board | `.hh-strip` |
 | **Holder** | The frame around a strip that carries its status colour, with a tab holding the status word | `.hh-strip` itself (`data-status`), tab `.hh-strip-tab` |
-| **Strip bay** | The grid of strips; the triage queue | `.hh-strip-bay` |
+| **Feed** | The triage surface: every Pending Round, each a strip in its holder, fully expanded in one column, like strips racked open on the desk in arrival order | `.hh-feed` |
+| **Feed index** | The slim rack of entries beside the Feed: callsign, title, time to the next Lock, In view | `.hh-feed-index` |
+| **Lock** | A Question's deadline firing; "Lock soon" under 60 s | Lock soon badge |
+| **Strip bay** | The grid of strips; the reference triage queue, kept beside one open Round | `.hh-strip-bay` |
+| **Lane** | One Agent session's strips side by side on the Agents page | `.hh-lane` |
+| **Advisor** | A configured helper that reads a Round and returns a Suggestion; it never sends | `.hh-advisor-*` |
 | **Callsign** | An Agent's display identity: client kind plus label, e.g. `CLAUDE·api-refactor` | `.hh-callsign` |
 | **Recommended marker** | Signal-green mark on the Agent's recommended option | `.hh-recommended` |
 | **Policy timer** | The Unanswered Policy countdown along the strip's edge | `.hh-policy-timer` |

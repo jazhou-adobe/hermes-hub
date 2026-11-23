@@ -6,10 +6,10 @@ import { Markdown } from "../markdown.tsx";
 const FOLD_MIN = 8;
 
 const KIND: Record<AttachmentDoc["kind"], { word: string; icon: IconName }> = {
-  markdown: { word: "Markdown", icon: "file" },
+  markdown: { word: "Markdown", icon: "markdown" },
   diff: { word: "Diff", icon: "diff" },
   code: { word: "Code", icon: "code" },
-  image: { word: "Image", icon: "file" },
+  image: { word: "Image", icon: "image" },
   file: { word: "File", icon: "file" },
   link: { word: "Link", icon: "link" },
 };
@@ -73,7 +73,7 @@ function linkHost(url: string): string {
 function AttachmentBody({ attachment: a, title }: { attachment: AttachmentDoc; title: string }) {
   switch (a.kind) {
     case "markdown":
-      return <Markdown className="pv-prose" text={a.content} />;
+      return <Markdown className="hh-attachment-prose hh-prose" text={a.content} />;
     case "diff":
       return (
         <div className="hh-attachment-body" role="region" tabIndex={0} aria-label={`Diff of ${title}`}>
@@ -89,13 +89,13 @@ function AttachmentBody({ attachment: a, title }: { attachment: AttachmentDoc; t
       );
     case "image":
       return (
-        <div className="pv-image-plane">
-          <img className="pv-image" src={`data:${a.media_type};base64,${a.data}`} alt={a.alt} />
+        <div className="hh-attachment-image">
+          <img src={`data:${a.media_type};base64,${a.data}`} alt={a.alt} />
         </div>
       );
     case "link":
       return (
-        <div className="pv-prose">
+        <div className="hh-attachment-prose hh-prose">
           <p>
             <a className="hh-link" href={a.url} target="_blank" rel="noreferrer">
               {a.title ?? a.url} ({linkHost(a.url)})<span className="hh-visually-hidden"> opens in a new tab</span>
@@ -161,9 +161,11 @@ function Diff({ content }: { content: string }) {
       {parts.flatMap((g) =>
         g.fold
           ? [
-              <li className="pv-diff-fold" key={key++}>
+              <li className="hh-diff-fold" key={key++}>
                 <details>
-                  <summary className="pv-fold-summary">Show {g.lines.length} unchanged lines</summary>
+                  <summary className="hh-diff-fold-summary">
+                    <Icon name="chevron-right" /> Show {g.lines.length} unchanged lines
+                  </summary>
                   <ol className="hh-diff">
                     {g.lines.map((line, i) => (
                       <DiffRow key={i} line={line} />

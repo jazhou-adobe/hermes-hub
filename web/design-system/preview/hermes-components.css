@@ -142,11 +142,18 @@
   border: 0;
 }
 
+/* Line icons from preview/hermes-icons.json, drawn in currentColor; the stroke lives here so a sprite or inline <svg> needs
+   no presentation attributes. */
 .hh-icon {
   width: var(--hh-icon-size);
   height: var(--hh-icon-size);
   flex: none;
   vertical-align: middle;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--hh-border-width-thick);
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* ---------- Chrome and navigation ---------- */
@@ -668,7 +675,10 @@ fieldset.hh-field {
   font-weight: var(--hh-font-weight-bold);
   letter-spacing: var(--hh-letter-spacing-caps);
   text-transform: uppercase;
-  white-space: nowrap;
+  /* Long labels ("Lock soon · 00:47 to next Lock") wrap on narrow screens instead of widening the page. */
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .hh-badge[data-tone='success'] {
@@ -755,6 +765,13 @@ fieldset.hh-field {
   pointer-events: none;
 }
 
+/* Command Center placement: under the sticky app bar, out of the flow, so a toast never shifts the Feed and never covers
+   the sticky Answer bar at the bottom of the viewport. */
+.hh-toast-region[data-placement='top'] {
+  top: var(--hh-layout-sticky-top);
+  bottom: auto;
+}
+
 .hh-toast {
   display: flex;
   flex-wrap: wrap;
@@ -773,6 +790,14 @@ fieldset.hh-field {
 .hh-toast[data-placement='inline'] {
   position: static;
   animation: none;
+}
+
+.hh-toast[data-tone='warning'] {
+  border-color: var(--hh-warning);
+}
+
+.hh-toast[data-tone='info'] {
+  border-color: var(--hh-info);
 }
 
 .hh-progress {
@@ -988,6 +1013,8 @@ fieldset.hh-field {
 /* ---------- Data display ---------- */
 
 .hh-table-wrap {
+  /* Containing block for visually hidden header text, so a scrolling table clips it instead of widening the page. */
+  position: relative;
   max-width: 100%;
   overflow-x: auto;
 }
@@ -1542,6 +1569,7 @@ fieldset.hh-field {
 }
 
 .hh-question-prompt {
+  max-width: var(--hh-layout-measure);
   margin: 0;
   font-family: var(--hh-type-body-lg-family);
   font-size: var(--hh-type-body-lg-size);
@@ -1585,10 +1613,29 @@ fieldset.hh-field {
   border: var(--hh-border-width-thick) solid var(--hh-strip-foreground);
 }
 
+/* The Agent's recommended row: a thick --hh-recommended boundary on every side (3:1 against strip), with the
+   .hh-recommended word inside. Once chosen, the row takes the chosen boundary like any other. */
+.hh-option[data-recommended='true'],
+.hh-option + .hh-option[data-recommended='true'] {
+  border: var(--hh-border-width-thick) solid var(--hh-recommended);
+}
+
+.hh-option[data-recommended='true']:has(input:checked) {
+  border-color: var(--hh-strip-foreground);
+}
+
+/* Read-only choices (a locked Question, an ended Round, the log) keep the paper's ink; the state is in words, never a
+   dimmed row. */
+.hh-option:has(input:disabled),
+.hh-option input:disabled {
+  cursor: default;
+}
+
 .hh-option-label {
   display: inline-flex;
   align-items: center;
   gap: var(--hh-space-2);
+  min-width: 0;
 }
 
 .hh-option-text {
@@ -1596,6 +1643,7 @@ fieldset.hh-field {
   justify-items: start;
   gap: var(--hh-space-1);
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .hh-option-detail {
@@ -1617,7 +1665,9 @@ fieldset.hh-field {
   font-weight: var(--hh-font-weight-bold);
   letter-spacing: var(--hh-letter-spacing-caps);
   text-transform: uppercase;
-  white-space: nowrap;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 /* Approve / reject: a two-option radio group. Each row reads as a key on the paper; side by side while each has room, stacked
@@ -1679,7 +1729,8 @@ fieldset.hh-field {
 
 .hh-attachment-title {
   flex: 1;
-  min-width: 0;
+  /* In a narrow column the title wraps to its own line rather than shrinking to a letter per line. */
+  min-width: min(100%, calc(var(--hh-space-12) * 3));
   overflow-wrap: anywhere;
 }
 
@@ -1811,8 +1862,9 @@ pre.hh-attachment-body {
   min-height: var(--hh-control-size-lg);
 }
 
-/* Headings that receive focus only by script (opening a Round, the empty bay) show where reading starts, not a control. */
-:is(.hh-round-head, .hh-strip-bay-head) [tabindex='-1']:focus {
+/* Headings that receive focus only by script (opening a Round, j / k in the Feed, the empty bay) show where reading starts.
+   After a pointer action they show no ring; after a keyboard move (:focus-visible) the ring shows where the Human landed. */
+:is(.hh-round-head, .hh-strip-bay-head, .hh-page-head) [tabindex='-1']:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -1945,6 +1997,777 @@ pre.hh-attachment-body {
 .hh-answered-log .hh-table td:last-child {
   min-width: var(--hh-overlay-tooltip-width);
 }
+
+/* ================= Command Center: shell, Feed, page-scroll Rounds and their parts =================
+ * Full width: the shell, the Feed column and tables span the viewport beside the side nav and the Feed index. Only
+ * --hh-layout-measure caps line length (prose, Question text, the search field). */
+
+/* ---------- App shell: side nav beside one page ---------- */
+
+.hh-app-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--hh-density-gap);
+  align-items: start;
+  padding: var(--hh-density-inset);
+}
+
+/* With .hh-side-nav: a wrapping row on narrow screens, a sticky column from lg. */
+.hh-app-shell-nav {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.hh-app-shell-main,
+.hh-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hh-density-gap);
+  min-width: 0;
+}
+
+.hh-app-shell-main[tabindex='-1']:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.hh-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--hh-space-2) var(--hh-space-4);
+}
+
+.hh-page-head > * {
+  margin: 0;
+}
+
+@media (min-width: 64rem) {
+  .hh-app-shell {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .hh-app-shell-nav {
+    position: sticky;
+    top: var(--hh-layout-sticky-top);
+    flex-direction: column;
+    flex-wrap: nowrap;
+  }
+}
+
+/* A page with a sticky Answer bar keeps keyboard focus clear of the app bar and of the bar (WCAG 2.4.11). The end padding
+   covers two bar rows, because the bar's actions wrap in narrow columns. */
+html:has(.hh-answer-bar[data-sticky='true']) {
+  scroll-padding-block: var(--hh-layout-sticky-top) calc(var(--hh-button-min-target) * 2 + var(--hh-density-inset) * 3);
+}
+
+/* ---------- Feed: the index beside one scrolling column of expanded Rounds ---------- */
+
+.hh-feed {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--hh-density-gap);
+  align-items: start;
+}
+
+.hh-feed-index {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hh-density-gap);
+  min-width: 0;
+}
+
+.hh-feed-index-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--hh-space-2);
+}
+
+.hh-feed-index-head > * {
+  margin: 0;
+}
+
+.hh-feed-index-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hh-space-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.hh-feed-index-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hh-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hh-feed-index-item {
+  min-width: 0;
+}
+
+.hh-feed-index-link {
+  display: grid;
+  gap: var(--hh-space-1);
+  padding: var(--hh-space-2) var(--hh-space-3);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-sm);
+  background: var(--hh-surface-card);
+  color: var(--hh-surface-card-foreground);
+  text-decoration: none;
+}
+
+.hh-feed-index-link:hover {
+  border-color: var(--hh-foreground);
+}
+
+/* In view: accent fill, a heavier boundary (padding absorbs it, so nothing shifts) and the words "In view" with a chevron.
+   Never colour alone. */
+.hh-feed-index-link[aria-current='location'] {
+  padding: calc(var(--hh-space-2) - var(--hh-border-width-thick) + var(--hh-border-width-thin))
+    calc(var(--hh-space-3) - var(--hh-border-width-thick) + var(--hh-border-width-thin));
+  border-width: var(--hh-border-width-thick);
+  border-color: var(--hh-foreground);
+  background: var(--hh-accent);
+  color: var(--hh-accent-foreground);
+}
+
+.hh-feed-index-title {
+  font-size: var(--hh-type-body-sm-size);
+  line-height: var(--hh-type-body-sm-line-height);
+  font-weight: var(--hh-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.hh-feed-index-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hh-space-1) var(--hh-space-2);
+}
+
+.hh-feed-index-inview {
+  display: none;
+  align-items: center;
+  gap: var(--hh-space-1);
+  font-family: var(--hh-type-mono-sm-family);
+  font-size: var(--hh-type-mono-sm-size);
+  font-weight: var(--hh-font-weight-bold);
+  letter-spacing: var(--hh-letter-spacing-caps);
+  text-transform: uppercase;
+}
+
+.hh-feed-index-link[aria-current='location'] .hh-feed-index-inview {
+  display: inline-flex;
+}
+
+.hh-feed-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hh-space-8);
+  min-width: 0;
+}
+
+.hh-feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hh-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A Round reached from the index, j / k or a link lands below the sticky app bar. */
+.hh-feed-item {
+  scroll-margin-top: var(--hh-layout-sticky-top);
+}
+
+/* Below lg the index sits above the Feed and scrolls inside itself, so a new entry never pushes the Rounds down. */
+@media (width < 64rem) {
+  .hh-feed-index-list {
+    max-height: calc(var(--hh-strip-min-height) * 3);
+    overflow-y: auto;
+  }
+}
+
+@media (min-width: 64rem) {
+  .hh-feed {
+    grid-template-columns: var(--hh-layout-sidebar-width) minmax(0, 1fr);
+  }
+
+  .hh-feed-index {
+    position: sticky;
+    top: var(--hh-layout-sticky-top);
+    max-height: calc(100dvh - var(--hh-layout-sticky-top) - var(--hh-density-inset));
+    overflow-y: auto;
+  }
+}
+
+/* ---------- Page-scroll Round: the page scrolls, not the Round ---------- */
+
+/* Everything after the head: the sticky bar's containing block. A sticky bar never rises above the top of its containing
+   block, so with the head outside it the bar can never cover the Round head or title; while only the head is in view,
+   the bar waits under it. */
+.hh-round-flow {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hh-round[data-layout='page'] {
+  max-height: none;
+}
+
+.hh-round[data-layout='page'] > .hh-round-body {
+  overflow: visible;
+}
+
+/* Attachments run full height in a page-scroll Round; only a code plane keeps its --hh-code-max-height cap. */
+.hh-round[data-layout='page'] .hh-attachment-body:not(pre) {
+  max-height: none;
+}
+
+/* The Round title: sentence case in every theme, because titles are long. */
+.hh-round-title {
+  letter-spacing: var(--hh-letter-spacing-none);
+  text-transform: none;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+/* The Round's own action bar. A sticky bar only holds while its Round spans the viewport's bottom edge, so only the bar
+   of the Round in view sticks, with no script. */
+.hh-answer-bar[data-sticky='true'] {
+  position: sticky;
+  bottom: 0;
+  border-top: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+/* An ended Round is read-only in place; its bar never sticks. */
+.hh-round[data-state='ended'] .hh-answer-bar {
+  position: static;
+}
+
+.hh-round[data-state='ended'] .hh-option,
+.hh-question[data-state='locked'] .hh-option {
+  cursor: default;
+}
+
+/* Children of a Question that span both columns: alerts, the per-Question Draft, Advisor markers. */
+.hh-question > :is(.hh-alert, .hh-question-draft, .hh-advisor-suggestion, .hh-advisor-offer, .hh-advisor-changed) {
+  grid-column: 1 / -1;
+}
+
+.hh-round-note {
+  padding: var(--hh-density-inset);
+  border-bottom: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+.hh-round-note > * {
+  margin: 0;
+}
+
+.hh-inline-panel,
+.hh-round-error {
+  margin: 0 var(--hh-density-inset) var(--hh-density-inset);
+}
+
+/* Muted ink never sits on strip paper: on the paper, hints, list terms and muted text take the paper's own ink. */
+:is(.hh-strip-paper, .hh-round) :is(.hh-dl dt, .hh-hint, .hh-muted, .hh-table th),
+.hh-dl[data-plane='strip'] dt {
+  color: inherit;
+}
+
+:is(.hh-strip-paper, .hh-round) .hh-dl dt,
+.hh-dl[data-plane='strip'] dt {
+  font-weight: var(--hh-font-weight-bold);
+}
+
+/* ---------- Free-text Recommended: shown with Use it, never prefilled ---------- */
+
+.hh-recommended-text {
+  display: grid;
+  justify-items: start;
+  gap: var(--hh-space-2);
+  padding: var(--hh-space-3);
+  border: var(--hh-border-width-thick) solid var(--hh-recommended);
+  border-radius: var(--hh-radius-sm);
+}
+
+.hh-recommended-text > * {
+  margin: 0;
+}
+
+.hh-recommended-text-quote {
+  max-width: var(--hh-layout-measure);
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Markdown: prose typography, and the reading plane for markdown Attachments ---------- */
+
+.hh-prose > * {
+  max-width: var(--hh-layout-measure);
+  margin: 0 0 var(--hh-space-2);
+}
+
+.hh-prose > :last-child {
+  margin-bottom: 0;
+}
+
+.hh-prose :is(h1, h2, h3, h4, h5, h6) {
+  font-family: var(--hh-type-heading-md-family);
+  font-size: var(--hh-type-body-lg-size);
+  line-height: var(--hh-type-body-lg-line-height);
+  font-weight: var(--hh-font-weight-semibold);
+}
+
+.hh-prose ul {
+  list-style: disc;
+}
+
+.hh-prose ol {
+  list-style: decimal;
+}
+
+.hh-prose :is(ul, ol) {
+  padding-inline-start: var(--hh-space-6);
+}
+
+.hh-prose a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: var(--hh-border-width-thin);
+  text-underline-offset: var(--hh-space-1);
+}
+
+.hh-prose code {
+  padding: 0 var(--hh-space-1);
+  border-radius: var(--hh-radius-sm);
+  background: var(--hh-code);
+  color: var(--hh-code-foreground);
+  font-family: var(--hh-type-mono-family);
+  font-size: var(--hh-type-mono-sm-size);
+}
+
+.hh-prose pre {
+  max-width: none;
+  padding: var(--hh-space-2) var(--hh-space-3);
+  overflow-x: auto;
+  border-radius: var(--hh-radius-sm);
+  background: var(--hh-code);
+  color: var(--hh-code-foreground);
+  font-family: var(--hh-type-mono-family);
+  font-size: var(--hh-type-mono-size);
+  line-height: var(--hh-type-mono-line-height);
+}
+
+.hh-prose pre code {
+  padding: 0;
+  font-size: inherit;
+}
+
+.hh-prose table {
+  border-collapse: collapse;
+}
+
+.hh-prose :is(th, td) {
+  padding: var(--hh-space-1) var(--hh-space-2);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  text-align: start;
+}
+
+.hh-prose blockquote {
+  margin-inline: var(--hh-space-4) 0;
+  font-style: italic;
+}
+
+.hh-attachment-prose {
+  padding: var(--hh-space-3) var(--hh-space-4);
+  background: var(--hh-strip);
+  color: var(--hh-strip-foreground);
+  font-family: var(--hh-type-body-family);
+  font-size: var(--hh-type-body-size);
+  line-height: var(--hh-type-body-line-height);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Image Attachments: alt text required; capped like a code plane until expanded ---------- */
+
+.hh-attachment-image {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: var(--hh-space-3);
+  background: var(--hh-surface-shelf);
+  color: var(--hh-surface-shelf-foreground);
+}
+
+.hh-attachment-image img {
+  display: block;
+  max-width: 100%;
+  max-height: var(--hh-code-max-height);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+.hh-attachment-image[data-state='expanded'] img {
+  max-height: none;
+}
+
+/* ---------- Diff folds: runs of 8 or more unchanged lines collapse behind a disclosure ---------- */
+
+.hh-diff-fold {
+  display: block;
+  border-block: var(--hh-border-width-thin) dashed var(--hh-border);
+}
+
+.hh-diff-fold-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--hh-space-2);
+  min-height: var(--hh-control-size-sm);
+  padding: 0 var(--hh-space-3);
+  font-family: var(--hh-type-mono-sm-family);
+  font-size: var(--hh-type-mono-sm-size);
+  list-style: none;
+  cursor: pointer;
+}
+
+.hh-diff-fold-summary::-webkit-details-marker {
+  display: none;
+}
+
+.hh-diff-fold-summary .hh-icon {
+  transition: transform var(--hh-motion-fast) var(--hh-easing-standard);
+}
+
+details[open] > .hh-diff-fold-summary .hh-icon {
+  transform: rotate(90deg);
+}
+
+.hh-diff-fold .hh-diff {
+  padding: 0;
+}
+
+/* ---------- Proposal: the approve/reject Question's editable proposal ---------- */
+
+.hh-proposal-edit {
+  display: grid;
+  gap: var(--hh-space-3);
+  padding: var(--hh-space-3);
+}
+
+.hh-proposal-input {
+  font-family: var(--hh-type-mono-family);
+  font-size: var(--hh-type-mono-size);
+  line-height: var(--hh-type-mono-line-height);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.hh-proposal-original {
+  padding: 0 var(--hh-space-3) var(--hh-space-3);
+}
+
+.hh-proposal-original > summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--hh-button-min-target);
+  font-family: var(--hh-type-label-family);
+  font-size: var(--hh-type-label-size);
+  font-weight: var(--hh-type-label-weight);
+  cursor: pointer;
+}
+
+.hh-proposal-original > pre {
+  margin-top: var(--hh-space-2);
+}
+
+/* ---------- Advisor: picker, run status, Suggestion markers, unparsed briefing ---------- */
+
+.hh-advisor-row {
+  padding: var(--hh-density-inset);
+  border-bottom: var(--hh-border-width-thin) solid var(--hh-border);
+  list-style: none;
+}
+
+.hh-advisor-row > .hh-alert {
+  margin: 0;
+}
+
+.hh-advisor-picker {
+  display: grid;
+  gap: var(--hh-space-2);
+}
+
+.hh-advisor-status .hh-spinner {
+  vertical-align: middle;
+  margin-inline-end: var(--hh-space-1);
+}
+
+.hh-advisor-suggestion,
+.hh-advisor-offer,
+.hh-advisor-changed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hh-space-2) var(--hh-space-3);
+  margin: 0;
+}
+
+.hh-advisor-rationale {
+  flex: 1 1 100%;
+  max-width: var(--hh-layout-measure);
+  margin: 0;
+}
+
+.hh-alert > .hh-advisor-briefing {
+  grid-column: 2;
+  margin: 0;
+}
+
+/* ---------- Answered log: values and who set them, delivery, search matches, day groups, filter tray ---------- */
+
+.hh-log-values {
+  display: grid;
+  gap: var(--hh-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hh-log-setter {
+  color: var(--hh-muted-foreground);
+}
+
+.hh-match {
+  padding: 0 var(--hh-space-1);
+  border-radius: var(--hh-radius-sm);
+  background: var(--hh-primary);
+  color: var(--hh-primary-foreground);
+}
+
+.hh-answered-log-day > th {
+  background: var(--hh-surface-shelf);
+  color: var(--hh-surface-shelf-foreground);
+}
+
+.hh-filter-tray {
+  display: grid;
+  gap: var(--hh-density-gap);
+  padding: var(--hh-density-inset);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-sm);
+}
+
+.hh-filter-tray-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hh-space-2);
+}
+
+.hh-input[type='search'] {
+  max-width: var(--hh-layout-measure);
+}
+
+.hh-table .hh-button {
+  white-space: normal;
+  text-align: start;
+}
+
+/* ---------- Agents: Detection details, in-flow popover, Lanes, the non-modal Round drawer ---------- */
+
+.hh-popover-anchor {
+  display: inline-grid;
+  gap: var(--hh-space-2);
+  justify-items: start;
+  max-width: 100%;
+}
+
+.hh-popover-anchor > .hh-popover {
+  max-width: 100%;
+}
+
+.hh-detection {
+  border-top: var(--hh-border-width-thin) solid var(--hh-border);
+}
+
+.hh-detection-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--hh-space-2);
+  min-height: var(--hh-button-min-target);
+  font-family: var(--hh-type-label-family);
+  font-size: var(--hh-type-label-size);
+  font-weight: var(--hh-type-label-weight);
+  cursor: pointer;
+}
+
+.hh-detection[open] > .hh-dl {
+  margin-block: var(--hh-space-2);
+}
+
+.hh-lanes-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--hh-density-gap);
+  align-items: start;
+}
+
+.hh-lanes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--hh-overlay-popover-width)), 1fr));
+  gap: var(--hh-density-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hh-lane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hh-space-3);
+  min-width: 0;
+}
+
+.hh-lane-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hh-space-2);
+}
+
+.hh-lane-head > * {
+  margin: 0;
+}
+
+.hh-lane-list {
+  flex: 1;
+}
+
+.hh-lane-slot {
+  display: grid;
+  place-items: center;
+  padding: var(--hh-space-3);
+}
+
+.hh-lane-slot > * {
+  margin: 0;
+  text-align: center;
+}
+
+/* Non-modal drawer: a panel docked beside the content it explains. The page stays usable; Escape or Close returns focus
+   to the strip that opened it. Modal work still uses .hh-sheet. */
+.hh-drawer {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 0;
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-md);
+  background: var(--hh-surface-panel);
+  color: var(--hh-surface-panel-foreground);
+}
+
+@media (min-width: 64rem) {
+  .hh-lanes-layout:has(> .hh-drawer) {
+    grid-template-columns: minmax(0, 1fr) min(var(--hh-overlay-drawer-width), 40%);
+  }
+
+  .hh-drawer {
+    position: sticky;
+    top: var(--hh-layout-sticky-top);
+    max-height: calc(100dvh - var(--hh-layout-sticky-top) - var(--hh-density-inset));
+    overflow-y: auto;
+  }
+}
+
+/* ---------- Settings: sections nav beside the panels; read-only config views ---------- */
+
+.hh-settings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--hh-density-gap);
+  align-items: start;
+}
+
+.hh-settings-panels {
+  display: grid;
+  gap: var(--hh-density-gap);
+  min-width: 0;
+}
+
+@media (min-width: 64rem) {
+  .hh-settings {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .hh-settings > .hh-side-nav {
+    position: sticky;
+    top: var(--hh-layout-sticky-top);
+  }
+}
+
+.hh-config-source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hh-space-2);
+}
+
+.hh-field-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--hh-overlay-menu-width)), 1fr));
+  gap: var(--hh-density-gap);
+}
+
+/* The switch's state word beside its track; a fixed width so On / Off never moves the label. */
+.hh-switch-state {
+  display: inline-block;
+  min-width: var(--hh-space-6);
+  font-family: var(--hh-type-mono-sm-family);
+  font-size: var(--hh-type-mono-sm-size);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Loading: a skeleton the height of a strip ---------- */
+
+.hh-skeleton[data-shape='strip'] {
+  min-height: var(--hh-strip-min-height);
+}
+
+/* ---------- Fill scale for a strict CSP: data-fill="0…100" in steps of 5, no style attribute ----------
+ * Markup that cannot carry style="" (a Content-Security-Policy without 'unsafe-inline' for styles) sets data-fill on
+ * .hh-policy-timer-fill or .hh-progress-fill. Script may instead set --timer-fraction / --progress-value through the
+ * CSSOM (element.style.setProperty, or React's style prop), which such a policy allows. */
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='0'] { --timer-fraction: 0; --progress-value: 0; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='5'] { --timer-fraction: 0.05; --progress-value: 0.05; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='10'] { --timer-fraction: 0.1; --progress-value: 0.1; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='15'] { --timer-fraction: 0.15; --progress-value: 0.15; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='20'] { --timer-fraction: 0.2; --progress-value: 0.2; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='25'] { --timer-fraction: 0.25; --progress-value: 0.25; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='30'] { --timer-fraction: 0.3; --progress-value: 0.3; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='35'] { --timer-fraction: 0.35; --progress-value: 0.35; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='40'] { --timer-fraction: 0.4; --progress-value: 0.4; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='45'] { --timer-fraction: 0.45; --progress-value: 0.45; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='50'] { --timer-fraction: 0.5; --progress-value: 0.5; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='55'] { --timer-fraction: 0.55; --progress-value: 0.55; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='60'] { --timer-fraction: 0.6; --progress-value: 0.6; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='65'] { --timer-fraction: 0.65; --progress-value: 0.65; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='70'] { --timer-fraction: 0.7; --progress-value: 0.7; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='75'] { --timer-fraction: 0.75; --progress-value: 0.75; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='80'] { --timer-fraction: 0.8; --progress-value: 0.8; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='85'] { --timer-fraction: 0.85; --progress-value: 0.85; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='90'] { --timer-fraction: 0.9; --progress-value: 0.9; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='95'] { --timer-fraction: 0.95; --progress-value: 0.95; }
+:is(.hh-policy-timer-fill, .hh-progress-fill)[data-fill='100'] { --timer-fraction: 1; --progress-value: 1; }
 
 /* ---------- Motion recipes (durations collapse to 1ms under reduced motion) ---------- */
 

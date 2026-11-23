@@ -6,7 +6,7 @@ Copied from the Apollo design master. **Files in this folder are read-only here*
 |---|---|
 | Brand | `hermes` (Hermes Hub, token prefix `--hh-*`) |
 | Master repo | `jazhou-adobe/apollo-tokens`, path `brands/hermes/design` |
-| Master commit | `1d03cf95ad82e400e88e346ff0cb8cb683ee58da` |
+| Master commit | `0b316ce29a5f18e14ddae1cfc4b2639a466ca9a1` (apollo-tokens PR #1, the Command Center additions; previously `1d03cf9`) |
 | Theme | `hermes-flight-director` (Flight Director 2169), `data-theme` on `<html>` |
 | Colour option | default, **Console slate** (no `data-palette`) |
 | Density | `compact` on the Feed index region (`data-density="compact"`); the Rounds and every other surface use the default density. `glance` is not used (the phone surface is out of scope). |
@@ -19,6 +19,7 @@ The manifest `copy` list, with the relative layout kept:
 - `tokens/themes.css`, `tokens/tailwind-theme.css`, `tokens/tokens.json`
 - `tokens/worlds/flight-director.css`, `tokens/worlds/flight-director.json`
 - `preview/hermes-components.css` (the components stylesheet; its path in the master is `preview/`)
+- `preview/hermes-icons.json` (the icon set; `web/src/icons.tsx` imports it)
 - `agent-contract/screen-generation-rules.md`, `foundations/`, `components/`, `patterns/`
 - `fonts/BigShoulders-latin-variable.woff2` (from the master's `app/fonts/`)
 
@@ -26,15 +27,16 @@ Not copied: `preview/*-preview.css`, `app/` (except that woff2), `research/`, `a
 
 Two files in this folder are **not** in the manifest and are written here:
 
-- `base.css`: the `@layer base` block of the master's `app/globals.css`, verbatim, so a plain-CSS entry can import it (the adoption skill says to copy those rules).
+- `base.css`: the `@layer base` block of the master's `app/globals.css`, verbatim, so a plain-CSS entry can import it (the adoption skill says to copy those rules). `app/globals.css` is unchanged between `1d03cf9` and `0b316ce`.
 - `fonts.css` and the other files in `fonts/`: see Fonts.
 
 ## Recorded deviations
 
 1. **Bun HTML import instead of Next.js.** The Command Center is a Bun-bundled React SPA (`docs/specs/frontend-stack.md`), so there is no `app/layout.tsx`, `app/fonts.ts` or `next build`. The theme attribute goes straight on `<html>`.
 2. **Self-hosted fonts with recorded sources instead of `next/font`.** `fonts.css` declares the `@font-face` rules and sets the six `--font-*` variables the tokens reference, to the family names. Sources below.
-3. **No Tailwind.** `tokens/tailwind-theme.css` is copied but imported by neither `web/preview/` nor the app; layout glue is plain CSS on `--hh-*` tokens (`web/preview/preview.css`, ported to `web/src/app.css`).
+3. **No Tailwind.** `tokens/tailwind-theme.css` is copied but imported by neither `web/preview/` nor the app. Since `0b316ce` the app has no layout glue: `web/src/app.css` only imports this folder, and the layout comes from the master's Command Center classes (`.hh-app-shell`, `.hh-feed`, `.hh-round-flow`, …). The historical static preview (`web/preview/preview.css`) keeps its `pv-` glue as built against `1d03cf9`.
 4. **No world CSS inlining.** The world stylesheet is imported unlayered, as the adoption skill describes (the master inlines it from `app/layout.tsx` only for `next dev`).
+5. **Answered log day groups as sections.** The master's log blueprint groups one table by day with `tr.hh-answered-log-day` rows; the Hub keeps one `section` with an `h2` and its own table per day (and one ranked table for search results), so the day headings stay in the page outline. No CSS is involved.
 
 ## CSS import order
 

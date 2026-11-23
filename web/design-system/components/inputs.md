@@ -24,6 +24,8 @@ The wrapper for every control: label, optional hint, control, error.
 - Required: the label says "(required)" in words; no asterisk-only marking.
 - Tokens: `--hh-type-label-*`, `--hh-muted-foreground` and `--hh-type-body-sm-*` for hints, `--hh-destructive` for the invalid border, `--hh-space-1` gap.
 
+Two related fields side by side (quiet hours: **Quiet from** / **Quiet until**, `input[type="time"]`) sit in `.hh-field-pair`, which wraps them to one column on narrow screens.
+
 ## Input — `.hh-input`
 
 - Height `--hh-button-min-target`, `--hh-input` background, `--hh-foreground` text, `--hh-border` boundary (3:1 against `input` and every surface). Input, select and textarea share one style.
@@ -58,7 +60,7 @@ Native `<select>` styled with tokens, for settings only (notification sound, the
 
 ## Switch — `.hh-switch`
 
-[APG switch](https://www.w3.org/WAI/ARIA/apg/patterns/switch/): `button.hh-switch[role="switch"]` with `aria-checked`, containing `.hh-switch-track` > `.hh-switch-thumb` and a fixed label ("Single-key shortcuts"). On: track fills with `--hh-accent` and the thumb moves to the end in `--hh-accent-foreground`; the state word "On"/"Off" sits beside the track, so position and word carry the state, not colour. Takes effect at once and confirms with a status message. Target height `--hh-button-min-target`; the track is sized from `--hh-callsign-chip-height`.
+[APG switch](https://www.w3.org/WAI/ARIA/apg/patterns/switch/): `button.hh-switch[role="switch"]` with `aria-checked`, containing `.hh-switch-track` > `.hh-switch-thumb` and a fixed label ("Single-key shortcuts"). On: track fills with `--hh-accent` and the thumb moves to the end in `--hh-accent-foreground`; the state word "On"/"Off" sits beside the track in `.hh-switch-state` (mono, fixed width so the label never moves), so position and word carry the state, not colour. Takes effect at once and confirms with a status message. Target height `--hh-button-min-target`; the track is sized from `--hh-callsign-chip-height`. Sound is **off by default**.
 
 ## Chip — `.hh-chip`
 

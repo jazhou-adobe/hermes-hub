@@ -2,7 +2,7 @@
 
 Overlays sit above the board: a **dialog** that takes over until the Human decides, a **sheet** docked to an edge, a **menu** of actions, a **popover** that explains, a **tooltip** that names an icon, and a **toast** that confirms. They share one rule set: open only on the Human's action, close the way people expect (Escape, Close, click outside for non-modal ones), never leave on a timer, and return focus to their trigger.
 
-New Rounds never open an overlay. They join the bay.
+New Rounds never open an overlay. They join the Feed (or the bay), with a toast and a polite announcement.
 
 ## Choosing an overlay
 
@@ -14,7 +14,9 @@ New Rounds never open an overlay. They join the bay.
 | Pick an action on a strip or an Agent (Copy id, Open in log, Forget Agent) | Menu | A menu to choose a form value |
 | Read why a policy or detection value is what it is | Popover | A tooltip, which keyboard and touch input may never reveal |
 | Learn what an icon-only button does | Tooltip | A tooltip holding links or the only copy of a status |
-| Know that an Answer was delivered (Answers are final once sent) | Toast | A toast for a failure (use `role="alert"` in the Answer bar) |
+| Know that an Answer was delivered (Answers are final once sent), or that a Round, a Lock or a Suggestion needs a look | Toast with Open | A toast for a failure (use `role="alert"` in the Answer bar) |
+| Write a note, a redirect or an Advisor brief without losing sight of the Round | Inline panel ([feed-widgets.md](feed-widgets.md)) | A modal dialog over the Round |
+| Look at one Round beside the lanes | Non-modal drawer `.hh-drawer` ([agent-widgets.md](agent-widgets.md)) | A modal sheet, which blocks the lanes |
 
 ## Dialog — `.hh-dialog`
 
@@ -52,7 +54,9 @@ A modal `<dialog class="hh-sheet">` docked to the inline-end edge at full height
 
 ## Popover — `.hh-popover`
 
-A toggletip: a button with `aria-expanded` opens a non-modal `.hh-popover` with explanation text, width `--hh-overlay-popover-width`, `--hh-surface-card`, `--hh-elevation-overlay`, `--hh-layer-popover`. Used for "Why CLAUDE?" next to detection data and "What happens at zero?" next to a policy badge. Escape closes; focus returns to the button.
+A toggletip: a button with `aria-expanded` opens a non-modal `.hh-popover` with explanation text, width `--hh-overlay-popover-width`, `--hh-surface-card`, `--hh-elevation-overlay`, `--hh-layer-popover`. Used for "Why may this be wrong?" next to detection data and "What happens at zero?" next to a policy badge. Escape closes; focus returns to the button.
+
+- In flow: `.hh-popover-anchor` stacks the button and its popover in the page (no positioning), capped at the container width. Used inside cards and `<dl>` rows where a floating popover would overflow a narrow screen.
 
 ## Tooltip — `.hh-tooltip`
 
@@ -60,7 +64,23 @@ A toggletip: a button with `aria-expanded` opens a non-modal `.hh-popover` with 
 
 ## Toast — `.hh-toast`
 
-Confirms an action the Human took: "Answered · CLAUDE·api-refactor", with "Open in log". Stays until dismissed or replaced, never leaves on a timer. Toasts stack in `.hh-toast-region` (fixed at the inline-end bottom corner, `role="status"`, `--hh-layer-toast`); `data-placement="inline"` renders one in flow for specimens. `--hh-surface-tray` with `--hh-elevation-overlay`. Failures never go in a toast; they go in the Answer bar as `role="alert"`.
+Confirms an action the Human took ("Answered · CLAUDE·api-refactor", with **Open in log**), or tells the Human something needs a look. Stays until dismissed or replaced, never leaves on a timer. Toasts stack in `.hh-toast-region` (fixed at the inline-end bottom corner, `role="status"`, `--hh-layer-toast`); `data-placement="inline"` renders one in flow for specimens. `--hh-surface-tray` with `--hh-elevation-overlay`. Failures never go in a toast; they go in the Answer bar as `role="alert"`.
+
+### Toast variants with Open
+
+Anatomy: `.hh-toast[data-tone]` > `.hh-badge` (the event word) · `.hh-body-sm` (callsign chip and the detail) · **Open** (`.hh-button[data-size="sm"]`, a link to the Round's anchor or `/rounds/<id>`) and Dismiss (ghost `.hh-icon-button`, `aria-label="Dismiss: <event>"`).
+
+| Event | `data-tone` | Badge | Detail | Open goes to |
+|---|---|---|---|---|
+| A new Round arrives | none | New Round | CALLSIGN · title · "1 Question" | the Round in the Feed |
+| A Round's next Lock is 15 s away | `warning` | Lock in 15 s (clock icon) | CALLSIGN · the Question · what the policy will do ("Q1 · then applies recommended: Expand and contract") | that Question |
+| An Advisor Suggestion is ready | `info` | Suggestion ready | CALLSIGN · Advisor in mono · title | the Round's Advisor row |
+| Answered, Dismissed, Redirected | none | the Outcome word | CALLSIGN | Open in log |
+
+- The tone colours the boundary on every edge; the badge word says the event.
+- **Command Center placement**: `.hh-toast-region[data-placement="top"]`, fixed under the sticky app bar at `--hh-layout-sticky-top`, out of the flow. An inline toast in the Feed would shift every Round below it when it appears or is dismissed, which breaks "a new Round never moves scroll", and the bottom-end placement covers the sticky action bar. Newest on top; at most three, then the oldest is replaced.
+- The toast region is not the announcement: the Feed's polite `.hh-bay-status` region speaks the event once, so a stack of toasts is not read twice.
+- **Browser notification suppressed**: while the Command Center tab is visible and focused, or in quiet hours, the Hub sends no browser notification and no sound; the in-page toast still shows. Agent gone and Round ended by a policy raise no toast; the Feed and the log show them.
 
 ## Motion
 

@@ -54,7 +54,7 @@ async function openFeed(width: number, height: number): Promise<Page> {
   const page = await browser!.newPage();
   await page.setViewport({ width, height });
   await page.goto(`${url}/`, { waitUntil: "load" });
-  await page.waitForSelector(".pv-feed-item");
+  await page.waitForSelector(".hh-feed-item");
   return page;
 }
 
@@ -102,8 +102,8 @@ describe.skipIf(!enabled)("Command Center in Chrome", () => {
       scrollY: window.scrollY,
       scrollX: window.scrollX,
       value: (document.querySelector(f) as HTMLTextAreaElement).value,
-      order: [...document.querySelectorAll(".pv-feed-list > .pv-feed-item")].map((el) => el.id),
-      toast: document.querySelector(".pv-toasts")?.textContent ?? "",
+      order: [...document.querySelectorAll(".hh-feed-list > .hh-feed-item")].map((el) => el.id),
+      toast: document.querySelector(".hh-toast-region")?.textContent ?? "",
     }), field);
     expect(after.active).toBe(before.active);
     expect(after.scrollY).toBe(before.scrollY);
