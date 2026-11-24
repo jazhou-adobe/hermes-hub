@@ -79,6 +79,7 @@ Clients that prefer a URL can use the Hub's Streamable HTTP endpoint, `http://12
 
 ## Project
 
+- **Architecture:** how the pieces fit, with diagrams and a worked Advisor run, in [`docs/architecture.md`](docs/architecture.md).
 - **Specs:** every spec is confirmed, in [`docs/specs/`](docs/specs/README.md).
 - **Vocabulary:** [`GLOSSARY.md`](GLOSSARY.md).
 - **Planning record:** the [Wayfinder map](https://github.com/jazhou-adobe/hermes-hub/issues/1).

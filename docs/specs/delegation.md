@@ -60,6 +60,7 @@ The Hub builds the prompt from:
 - the Round JSON: Questions, Recommended options, Proposals, context, links;
 - text Attachments; image Attachments become a line with their `alt` text;
 - the brief;
+- for each Question, the exact value shape it accepts, built from that Question's option ids, `allow_other`, selection limits, `max_length` and Proposal editability;
 - the required output format.
 
 The Advisor must print one JSON object, which the Hub takes from the **last JSON object in stdout**:

@@ -1,4 +1,4 @@
-import type { Attachment, QuestionValue, Round } from "../schema/types.ts";
+import type { Attachment, Question, QuestionValue, Round } from "../schema/types.ts";
 import { parseHumanValue } from "./answers.ts";
 
 /** One Advisor run, as recorded in `advisor_runs` and shown on the Round (delegation spec: History). */
@@ -152,9 +152,45 @@ const SUGGESTION_FORMAT_EXAMPLE = {
   schema: "hermes.suggestion/v1",
   summary: "One-line summary of your recommendation.",
   questions: {
-    "<question id>": { value: "<same shape a Human would send for that Question's kind>", rationale: "Why." },
+    "<question id>": { value: "<the value shape listed under that Question>", rationale: "Why." },
   },
 };
+
+/**
+ * The exact value shape `parseHumanValue` accepts for `q`, as prompt lines, so an Advisor does not
+ * get a Question skipped for a near-miss shape (for example an approve value without `edited`).
+ */
+function valueShape(q: Question): string[] {
+  switch (q.kind) {
+    case "single": {
+      const ids = q.options.map((o) => JSON.stringify(o.id)).join(" | ");
+      const lines = [`value: {"selected": ${ids}}`];
+      if (q.allow_other) lines.push(`   or: {"other": "<your own answer>"}`);
+      return lines;
+    }
+    case "multi": {
+      const ids = q.options.map((o) => JSON.stringify(o.id)).join(", ");
+      const other = q.allow_other ? `, "other": "<your own answer, optional>"` : "";
+      const lines = [`value: {"selected": [<one or more of ${ids}>]${other}}`];
+      const limits = [
+        q.min_selected !== undefined ? `at least ${q.min_selected}` : "",
+        q.max_selected !== undefined ? `at most ${q.max_selected}` : "",
+      ].filter(Boolean);
+      if (limits.length) lines.push(`choose ${limits.join(" and ")}${q.allow_other ? " (Other counts as one)" : ""}`);
+      return lines;
+    }
+    case "text":
+      return [`value: {"text": "<your answer, at most ${q.max_length ?? 10_000} characters>"}`];
+    case "approve": {
+      const lines = [`value: {"decision": "approve" | "reject", "edited": false}`];
+      if (q.proposal?.editable) {
+        const edited = q.proposal.format === "json" ? "<the edited JSON value, matching its json_schema>" : `"<the edited ${q.proposal.format}>"`;
+        lines.push(`   or: {"decision": "approve" | "reject", "edited": true, "proposal": ${edited}}`);
+      }
+      return lines;
+    }
+  }
+}
 
 /** Builds the Advisor's stdin prompt: instructions, the Round, text Attachments, the brief, the output format. */
 export function buildPrompt(round: Round, brief: string | undefined): string {
@@ -189,13 +225,14 @@ export function buildPrompt(round: Round, brief: string | undefined): string {
       lines.push(typeof q.proposal.value === "string" ? q.proposal.value : JSON.stringify(q.proposal.value, null, 2));
       if (q.recommended) lines.push(`recommended: ${q.recommended}`);
     }
+    lines.push(...valueShape(q));
     if (q.attachments?.length) renderAttachments(q.attachments, lines);
   }
   if (brief) lines.push("", "Brief from the Human:", brief);
   lines.push(
     "",
     'Print exactly one JSON object as the LAST thing in your output, in this format (every key under "questions" must be',
-    "a Question id from above, with the same value shape a Human would send for that Question's kind):",
+    'a Question id from above, and each "value" must use exactly the value shape listed under that Question):',
     JSON.stringify(SUGGESTION_FORMAT_EXAMPLE, null, 2),
   );
   return lines.join("\n");
