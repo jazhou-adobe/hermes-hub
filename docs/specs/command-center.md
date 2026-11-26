@@ -82,7 +82,7 @@ This spec covers **behaviour only**: states, actions, order and keys. Visuals co
 | An Advisor Suggestion is ready | Yes: callsign, Advisor |
 | Agent gone, Round ended by a policy | No: shown in the Feed and the log only |
 
-Notifications are suppressed while the Command Center tab is visible and focused; the in-page toast still shows. Settings → Notifications holds the permission state and a mute switch.
+Notifications are suppressed while the Command Center tab is visible and focused; the in-page toast still shows. Settings → Notifications holds the permission state, a mute switch (browser and macOS notifications) and a separate **In-page toasts** switch. Toasts off: no toast; the Feed and the live-region announcement still update. Changed 2026-11-27: the mute switch used to leave toasts with no way to hide them.
 
 ## Live updates
 

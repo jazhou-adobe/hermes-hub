@@ -113,6 +113,7 @@ let toastId = 0;
 const MAX_TOASTS = 4;
 
 function pushToast(kind: Toast["kind"], roundId: string, text: string): void {
+  if (!state.settings.toasts) return;
   set({ toasts: [...state.toasts, { id: ++toastId, kind, roundId, text }].slice(-MAX_TOASTS) });
 }
 
@@ -314,7 +315,7 @@ function open(): void {
   });
   on("settings.changed", (data) => {
     const { settings } = data as Extract<HubEvent, { type: "settings.changed" }>;
-    set({ settings });
+    set(settings.toasts ? { settings } : { settings, toasts: [] });
   });
   events.onerror = () => {
     events.close();
@@ -331,7 +332,7 @@ export function reconnectNow(): void {
 
 /** A settings change from this tab, applied at once (the Hub echoes it to other tabs). */
 export function applySettings(settings: HubSettings): void {
-  set({ settings });
+  set(settings.toasts ? { settings } : { settings, toasts: [] });
 }
 
 export function connect(): void {

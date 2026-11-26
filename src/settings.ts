@@ -18,8 +18,10 @@ export interface QuietHours {
 }
 
 export interface HubSettings {
-  /** The mute switch: off silences browser and macOS notifications (the in-page toast still shows). */
+  /** The mute switch: off silences browser and macOS notifications. */
   notifications: boolean;
+  /** The in-page toasts (New Round, Lock in 15 s, Suggestion ready). The live region still announces. */
+  toasts: boolean;
   quiet_hours: QuietHours;
   /** One short tone in the Command Center tab on a new Round. Off by default. */
   sound: boolean;
@@ -31,6 +33,7 @@ export interface HubSettings {
 
 export const DEFAULT_SETTINGS: HubSettings = {
   notifications: true,
+  toasts: true,
   quiet_hours: { enabled: false, from: "22:00", to: "07:00" },
   sound: false,
   theme: "hermes-flight-director",
@@ -50,6 +53,7 @@ export function mergeSettings(current: HubSettings, patch: unknown): HubSettings
   for (const [key, value] of Object.entries(patch)) {
     switch (key) {
       case "notifications":
+      case "toasts":
       case "sound":
       case "shortcuts":
         if (typeof value !== "boolean") return `${key} must be true or false`;

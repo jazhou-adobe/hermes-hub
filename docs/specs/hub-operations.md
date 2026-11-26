@@ -57,7 +57,7 @@ A Hub on another port therefore needs `HERMES_HUB_URL` or `HERMES_HUB_HOME` in t
 
 | In `config.toml`: edited as text, reloaded when the file changes, shown read-only in Settings | Live in the Command Center: stored in the database |
 |---|---|
-| `port` (4747), `log_level`, limits (attachment and Round caps, flood cap, Live/Idle thresholds), backups (`keep = 7`), **Advisors** (`[[advisor]] name, command = [...], timeout_seconds`), **Auto-ask rules** (`[[auto_ask]] kind, project, label?, advisor, brief?`) | Notifications on or off, **quiet hours**, **sound**, appearance (theme, colour option), single-key shortcuts, **Forget Agent** |
+| `port` (4747), `log_level`, limits (attachment and Round caps, flood cap, Live/Idle thresholds), backups (`keep = 7`), **Advisors** (`[[advisor]] name, command = [...], timeout_seconds`), **Auto-ask rules** (`[[auto_ask]] kind, project, label?, advisor, brief?`) | Notifications on or off, in-page toasts on or off, **quiet hours**, **sound**, appearance (theme, colour option), single-key shortcuts, **Forget Agent** |
 
 - **Reloading:** the Hub watches `config.toml` and applies changes without a restart. Port and data-folder changes are the exception: they print "restart needed". An invalid file keeps the previous config and shows an error in Settings and in the log.
 - **`hermes-hub config`** prints the effective settings, with the source of each.

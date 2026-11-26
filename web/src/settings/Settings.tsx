@@ -260,7 +260,7 @@ export function Settings() {
               <span className="hh-badge" data-tone={PERMISSION[permission].tone}>
                 {permission === "granted" ? <Icon name="check" /> : null} {PERMISSION[permission].word}
               </span>
-              <span className="hh-body-sm">Shown while this tab is hidden. An in-page toast with Open always shows.</span>
+              <span className="hh-body-sm">Shown while this tab is hidden. In-page toasts have their own switch below.</span>
               {permission === "default" ? (
                 <button
                   type="button"
@@ -289,6 +289,12 @@ export function Settings() {
               checked={settings.notifications}
               onChange={(on) => update({ notifications: on })}
               hint="New Round, a Lock in 15 s, and a Suggestion ready. Agent gone and policy outcomes show in the Feed and log only."
+            />
+            <Switch
+              label="In-page toasts"
+              checked={settings.toasts}
+              onChange={(on) => update({ toasts: on })}
+              hint="The strip with Open at the top of this page. Off hides it; the Feed and screen-reader announcements still update."
             />
             <Switch
               label="Quiet hours"
