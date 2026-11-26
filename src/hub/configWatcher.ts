@@ -43,7 +43,7 @@ export function watchConfig(
       }
     }, 50);
   });
-  watcher.on("error", () => {}); // e.g. HERMES_HOME removed from under us; nothing useful to do
+  watcher.on("error", () => {}); // e.g. the Hub's folder removed from under us; nothing useful to do
   return () => {
     clearTimeout(settle);
     watcher.close();

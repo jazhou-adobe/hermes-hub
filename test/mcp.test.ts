@@ -202,7 +202,7 @@ function mcpDoor(client: Client, clock: FakeClock): Door {
   };
 }
 
-/** A client of the shim's own code, in process (the factory `hermes mcp` serves), over a linked pair. */
+/** A client of the shim's own code, in process (the factory `hermes-hub mcp` serves), over a linked pair. */
 function shimTransport({ url, clock }: Hub): Transport {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   const handle = serveStdio(shimFactory(url, { kind: "script", session: crypto.randomUUID() }, clock), { transport: serverSide });
@@ -439,7 +439,7 @@ describe.each(RPCS)("Codex 0.133's 2025-06-18 handshake through %s", (_name, con
   test("initialize negotiates 2025-06-18, and tools/call with _meta.threadId works on it", async () => {
     const hub = await up();
     const rpc = await connect(hub, "legacy");
-    // Verbatim from Codex 0.133.0's first message to `hermes mcp` (captured 2026-11-23).
+    // Verbatim from Codex 0.133.0's first message to `hermes mcp` (captured 2026-11-23, before the rename).
     const init = await rpc("initialize", {
       protocolVersion: LEGACY_VERSION,
       capabilities: { elicitation: {} },
@@ -453,7 +453,7 @@ describe.each(RPCS)("Codex 0.133's 2025-06-18 handshake through %s", (_name, con
   });
 });
 
-describe("hermes mcp (the real stdio process)", () => {
+describe("hermes-hub mcp (the real stdio process)", () => {
   function shimEnv(url: string, sessionId: string): Record<string, string> {
     const env: Record<string, string> = {};
     for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !AGENT_ENV.test(k)) env[k] = v;

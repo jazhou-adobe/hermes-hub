@@ -3,6 +3,8 @@ import { Database } from "bun:sqlite";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pidAlive, runningHub } from "../src/hub/lock.ts";
+import { WRAPPER } from "../src/paths.ts";
 
 const MAIN = join(import.meta.dir, "../src/cli/main.ts");
 const AGENT_ENV = /^(HERMES_|PI_|OMPCODE$|CODEX_|CLAUDE|CURSOR_|COPILOT_|AI_AGENT$|AGENT$)/;
@@ -20,14 +22,14 @@ interface Sandbox {
   env: Record<string, string>;
 }
 
-/** A fresh HERMES_HOME with a config.toml port, and an env free of the caller's own agent signals. */
+/** A fresh HERMES_HUB_HOME with a config.toml port, and an env free of the caller's own agent signals. */
 function sandbox(): Sandbox {
   const home = mkdtempSync(join(tmpdir(), "hermes-ops-test-"));
   const port = freePort();
   writeFileSync(join(home, "config.toml"), `port = ${port}\n`);
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !AGENT_ENV.test(k)) env[k] = v;
-  env.HERMES_HOME = home;
+  env.HERMES_HUB_HOME = home;
   return { home, url: `http://127.0.0.1:${port}`, env };
 }
 
@@ -53,7 +55,7 @@ async function run(env: Record<string, string>, ...args: string[]) {
   return { stdout, stderr, code };
 }
 
-/** Starts `hermes hub` in the background; returns the child so the test can stop it cleanly. */
+/** Starts `hermes-hub hub` in the background; returns the child so the test can stop it cleanly. */
 async function startHub(box: Sandbox) {
   const hub = Bun.spawn(["bun", MAIN, "hub"], { env: box.env, stdout: "pipe", stderr: "inherit" });
   cleanups.push(() => hub.kill());
@@ -123,7 +125,7 @@ function roundIds(dbPath: string): string[] {
 }
 
 describe("hub operations: hub.lock refuses a second Hub", () => {
-  test("a second `hermes hub` on the same data folder exits 1 and prints the first Hub's url and pid", async () => {
+  test("a second `hermes-hub hub` on the same data folder exits 1 and prints the first Hub's url and pid", async () => {
     const box = sandbox();
     cleanups.push(() => rmSync(box.home, { recursive: true, force: true }));
     await run(box.env, "migrate");
@@ -167,7 +169,7 @@ describe("hub operations: logs never carry Round content", () => {
 });
 
 describe("hub operations: backup and restore", () => {
-  test("hermes backup, more Rounds, hermes restore: the post-restore Rounds match the pre-addition set", async () => {
+  test("hermes-hub backup, more Rounds, hermes-hub restore: the post-restore Rounds match the pre-addition set", async () => {
     const box = sandbox();
     cleanups.push(() => rmSync(box.home, { recursive: true, force: true }));
     await run(box.env, "migrate");
@@ -202,7 +204,7 @@ describe("hub operations: backup and restore", () => {
     expect(asideFiles.length).toBe(1);
   });
 
-  test("hermes backup without a path defaults under .hermes/backups/", async () => {
+  test("hermes backup without a path defaults under backups/ in the Hub's folder", async () => {
     const box = sandbox();
     cleanups.push(() => rmSync(box.home, { recursive: true, force: true }));
     await run(box.env, "migrate");
@@ -210,5 +212,58 @@ describe("hub operations: backup and restore", () => {
     expect(backup.code).toBe(0);
     const files = readdirSync(join(box.home, "backups"));
     expect(files.some((f) => f.startsWith("hub-manual-"))).toBe(true);
+  });
+});
+
+describe("hub operations: the data folder", () => {
+  test("without HERMES_HUB_HOME, migrate and hub keep every file directly in the folder they run in", async () => {
+    const box = sandbox();
+    cleanups.push(() => rmSync(box.home, { recursive: true, force: true }));
+    const { HERMES_HUB_HOME: _unset, ...env } = box.env;
+    const inHome = { cwd: box.home, env, stdout: "pipe", stderr: "inherit" } as const;
+    expect(await Bun.spawn(["bun", MAIN, "migrate"], inHome).exited).toBe(0);
+    const hub = Bun.spawn(["bun", MAIN, "hub"], inHome);
+    cleanups.push(() => hub.kill());
+    await readUntil(hub.stdout.getReader(), new RegExp(` on ${box.url}`));
+    for (const file of ["hub.db", "hub.json", "hub.lock", "config.toml"]) {
+      expect({ file, exists: existsSync(join(box.home, file)) }).toEqual({ file, exists: true });
+    }
+    expect(existsSync(join(box.home, ".hermes"))).toBe(false);
+    await stopHubCleanly(hub);
+  });
+
+  test("bin/hermes-hub start runs the Hub detached in the current folder; stop ends it; both refuse the wrong state", async () => {
+    const box = sandbox();
+    const { HERMES_HUB_HOME: _unset, ...env } = box.env;
+    const wrapper = async (cmd: string) => {
+      const proc = Bun.spawn([WRAPPER, cmd], { cwd: box.home, env, stdout: "pipe", stderr: "pipe" });
+      const [stdout, stderr, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+      return { stdout, stderr, code };
+    };
+    cleanups.push(() => {
+      const holder = runningHub(join(box.home, "hub.lock"));
+      if (holder) process.kill(holder.pid, "SIGKILL");
+      rmSync(box.home, { recursive: true, force: true });
+    });
+
+    const early = await wrapper("start");
+    expect(early.code).toBe(1);
+    expect(early.stderr).toContain("run hermes-hub migrate");
+
+    expect((await wrapper("migrate")).code).toBe(0);
+    const started = await wrapper("start");
+    expect(started.code).toBe(0);
+    const pid = Number(/\(pid (\d+)\)/.exec(started.stdout)?.[1]);
+    expect(started.stdout).toContain(`Hermes Hub on ${box.url} (pid ${pid})`);
+    expect(JSON.parse(readFileSync(join(box.home, "hub.json"), "utf8")).pid).toBe(pid);
+    expect((await fetch(`${box.url}/v1/hub`)).status).toBe(200);
+    expect((await wrapper("start")).stderr).toContain(`already running at ${box.url} (pid ${pid})`);
+
+    const stopped = await wrapper("stop");
+    expect(stopped.code).toBe(0);
+    expect(stopped.stdout).toContain(`stopped Hermes Hub at ${box.url} (pid ${pid})`);
+    expect(pidAlive(pid)).toBe(false);
+    expect(existsSync(join(box.home, "hub.lock"))).toBe(false);
+    expect((await wrapper("stop")).code).toBe(1);
   });
 });

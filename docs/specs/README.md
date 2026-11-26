@@ -15,7 +15,7 @@ These are the confirmed specs for Hermes Hub Phase 1. Each was decided with the 
 | [frontend-stack.md](frontend-stack.md) | React 19 single-page app served by the Hub, design-system copy, SSE store | [#15](https://github.com/jazhou-adobe/hermes-hub/issues/15) |
 | [friendly-grill-client.md](friendly-grill-client.md) | friendly-grill as a thin client (cyber-avatar repo) | [#17](https://github.com/jazhou-adobe/hermes-hub/issues/17) |
 | [answered-log.md](answered-log.md) | Retention (forever), filters, FTS search, export | [#18](https://github.com/jazhou-adobe/hermes-hub/issues/18) |
-| [hub-operations.md](hub-operations.md) | Run from a clone, `<clone>/.hermes/`, `config.toml`, migrations, backups, logs, notifications | [#19](https://github.com/jazhou-adobe/hermes-hub/issues/19) |
+| [hub-operations.md](hub-operations.md) | Run from a clone, the data folder (`HERMES_HUB_HOME` or the launch folder), `config.toml`, migrations, backups, logs, notifications | [#19](https://github.com/jazhou-adobe/hermes-hub/issues/19) |
 
 **Where the specs disagree, the later ticket wins.** Each spec's "Changes to other specs" section records what it amended. The table is in decision order.
 

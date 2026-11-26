@@ -14,12 +14,12 @@ export function dailyBackupPath(backupsDir: string, date = new Date()): string {
   return join(backupsDir, `hub-${date.toISOString().slice(0, 10)}.db`);
 }
 
-/** The default destination for `hermes backup` without a path given. */
+/** The default destination for `hermes-hub backup` without a path given. */
 export function manualBackupPath(backupsDir: string, date = new Date()): string {
   return join(backupsDir, `hub-manual-${date.toISOString().replace(/[:.]/g, "-")}.db`);
 }
 
-/** Taken automatically before `hermes migrate` applies anything. */
+/** Taken automatically before `hermes-hub migrate` applies anything. */
 export function migrationBackupPath(backupsDir: string, date = new Date()): string {
   const rand = Math.random().toString(36).slice(2, 8);
   return join(backupsDir, `hub-pre-migrate-${date.toISOString().replace(/[:.]/g, "-")}-${rand}.db`);

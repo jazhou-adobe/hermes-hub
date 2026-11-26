@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Replays Codex 0.133.0's MCP wire (captured from a real `codex exec` on 2026-11-23) through the real
- * `hermes mcp` process, in real time, against the Hub at argv[2]. Each tool call gets Codex's default
+ * `hermes-hub mcp` process, in real time, against the Hub at argv[2]. Each tool call gets Codex's default
  * 60 s `tool_timeout_sec` as a hard deadline. Expected: hermes_ask returns `pending` at ~50 s, then
  * hermes_wait returns the Answer once the Human (this script, via the Command Center API) sends it.
  * Run through `scripts/live-mcp.sh replay`; never part of `bun test`.

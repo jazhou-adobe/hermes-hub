@@ -20,14 +20,14 @@ interface Sandbox {
   env: Record<string, string>;
 }
 
-/** A fresh HERMES_HOME with a config.toml port, and an env free of the caller's own agent signals. */
+/** A fresh HERMES_HUB_HOME with a config.toml port, and an env free of the caller's own agent signals. */
 function sandbox(): Sandbox {
   const home = mkdtempSync(join(tmpdir(), "hermes-test-"));
   const port = freePort();
   writeFileSync(join(home, "config.toml"), `port = ${port}\n`);
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !AGENT_ENV.test(k)) env[k] = v;
-  env.HERMES_HOME = home;
+  env.HERMES_HUB_HOME = home;
   return { home, url: `http://127.0.0.1:${port}`, env };
 }
 
@@ -81,12 +81,12 @@ const ROUND = {
 };
 
 describe("walking skeleton", () => {
-  test("hub refuses to start until hermes migrate has run", async () => {
+  test("hub refuses to start until hermes-hub migrate has run", async () => {
     const box = sandbox();
     cleanups.push(() => rmSync(box.home, { recursive: true, force: true }));
     const hub = await run(box.env, "hub");
     expect(hub.code).toBe(1);
-    expect(hub.stderr).toContain("run hermes migrate");
+    expect(hub.stderr).toContain("run hermes-hub migrate");
   });
 
   test("a script asks one single-choice Round, the Human answers, the script prints ANSWER and exits 0", async () => {

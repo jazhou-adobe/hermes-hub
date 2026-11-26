@@ -10,13 +10,13 @@ Status: **confirmed by the Human on 2026-11-20**, ticket [What front-end stack d
 The Command Center is a **React 19 single-page app, written in TypeScript, bundled by Bun and served by the Hub itself**, from the same `Bun.serve` and origin as the API: `http://127.0.0.1:<port>`.
 
 - One process.
-- One command (`hermes hub`).
+- One command (`hermes-hub hub`, or `hermes-hub start` in the background).
 - No Next.js.
 - No second dev server.
 
 ```mermaid
 graph LR
-  subgraph "hermes hub (one Bun process)"
+  subgraph "hermes-hub hub (one Bun process)"
     API["/v1/* Agent API · /mcp"]
     CCAPI["Command Center endpoints + Human SSE"]
     WEB["/, /rounds/:id, /log, /agents, /settings → web/index.html (bundled)"]
@@ -73,7 +73,7 @@ The design master has no React widgets for these screens yet, so the components 
 
 ## Fonts
 
-- **Self-hosted woff2** files ship with `hermes`, so the Command Center works offline: Schibsted Grotesk, Spline Sans Mono, Big Shoulders (from the design repo), Archivo, IBM Plex Mono and Michroma. They are all SIL OFL.
+- **Self-hosted woff2** files ship with `hermes-hub`, so the Command Center works offline: Schibsted Grotesk, Spline Sans Mono, Big Shoulders (from the design repo), Archivo, IBM Plex Mono and Michroma. They are all SIL OFL.
 - **`fonts.css`** declares the `@font-face` rules and sets the exact variables the tokens reference: `--font-schibsted-grotesk`, `--font-spline-sans-mono`, `--font-big-shoulders`, `--font-archivo`, `--font-ibm-plex-mono` and `--font-michroma`.
 - **Recorded deviation:** the adoption skill's `next/font` step is replaced by this. `SOURCE.md` notes it.
 

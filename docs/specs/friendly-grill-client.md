@@ -17,11 +17,11 @@ The command still runs **as a background job**, and the agent waits for it **wit
 
 ## `scripts/ask.mjs`
 
-1. **Hub check:** if `hermes` is on PATH and `GET /v1/hub` answers (discovery per the [identity spec](agent-identity.md)), it continues with the Hub path below.
+1. **Hub check:** if `HERMES_HUB_APP` is set, `$HERMES_HUB_APP/hermes-hub` is executable ([operations](hub-operations.md); the wrapper is never on PATH) and `GET /v1/hub` answers (discovery per the [identity spec](agent-identity.md)), it continues with the Hub path below.
 2. **Fallback:** otherwise it execs the **unchanged** `form-server.mjs` with the same arguments, so behaviour is exactly today's.
 3. **Hub path:**
    - converts the round to a Hermes Round (mapping below);
-   - runs `hermes ask <round> --out <tmp>` and waits for it;
+   - runs `"$HERMES_HUB_APP/hermes-hub" ask <round> --out <tmp>` and waits for it;
    - converts the Hermes Answer back to the friendly-grill answer shape;
    - writes it to `--out`;
    - prints the same markers: `READY <Command Center URL for the Round>`, `ANSWERS_FILE <path>`, and `ANSWERS` followed by the JSON.

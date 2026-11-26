@@ -1,44 +1,38 @@
 #!/usr/bin/env bash
 # Live Hub Skill checks: a real Agent completes a Round knowing Hermes only from the Hub Skill (or,
-# on Claude Code, from the hermes mcp shim's tool descriptions), against a throwaway Hub. Never part
+# on Claude Code, from the hermes-hub MCP shim's tool descriptions), against a throwaway Hub. Never part
 # of `bun test`.
 #
 #   scripts/live-skill.sh codex   `codex exec` under workspace-write with the doctor's snippet
 #                                 (network_access = true) applied as a -c override; Codex finds the
 #                                 Skill in the project's .agents/skills (needs `codex` logged in).
-#   scripts/live-skill.sh claude  `claude -p` with the shim registered the way `hermes setup claude`
+#   scripts/live-skill.sh claude  `claude -p` with the shim registered the way `hermes-hub setup claude`
 #                                 does it, through --mcp-config (needs `claude` logged in).
 #   scripts/live-skill.sh omp     sets up the Hub and the project, prints the task to hand to an omp
 #                                 agent, then plays the Human and waits for the Agent to finish.
 #
 # This script plays the Human: it answers the Agent's first Round with the Recommended options, a
-# while after it arrives, so the Agent really has to wait. Then it reports every hermes command (or
+# while after it arrives, so the Agent really has to wait. Then it reports every hermes-hub command (or
 # hermes_* tool call) the Agent made: one ask and no polling is a pass. Your own client config is
-# untouched; `hermes` is a wrapper in <work>/bin bound to this checkout and the throwaway Hub.
+# untouched; the Agent runs this checkout's bin/hermes-hub by the path the Skill copy names, and
+# finds the throwaway Hub through the exported HERMES_HUB_HOME.
 set -euo pipefail
 
 MODE=${1:?usage: scripts/live-skill.sh codex|claude|omp}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 WORK=$(mktemp -d /tmp/hermes-live-skill.XXXXXX)
-export HERMES_HOME="$WORK/home"
+export HERMES_HUB_HOME="$WORK/home"
 ANSWER_AFTER=${HERMES_LIVE_ANSWER_AFTER:-20}
-mkdir -p "$HERMES_HOME" "$WORK/bin" "$WORK/proj"
-printf 'port = %s\n' "${HERMES_LIVE_PORT:-4796}" > "$HERMES_HOME/config.toml"
+mkdir -p "$HERMES_HUB_HOME" "$WORK/proj"
+printf 'port = %s\n' "${HERMES_LIVE_PORT:-4796}" > "$HERMES_HUB_HOME/config.toml"
+HH="$ROOT/bin/hermes-hub"
 
-cat > "$WORK/bin/hermes" << EOF
-#!/usr/bin/env bash
-export HERMES_HOME="$HERMES_HOME"
-exec bun "$ROOT/src/cli/main.ts" "\$@"
-EOF
-chmod +x "$WORK/bin/hermes"
-export PATH="$WORK/bin:$PATH"
-
-hermes migrate > /dev/null
-hermes hub > "$WORK/hub.log" 2>&1 &
+"$HH" migrate > /dev/null
+"$HH" hub > "$WORK/hub.log" 2>&1 &
 HUB_PID=$!
 trap 'kill "$HUB_PID" 2> /dev/null || true; echo "work dir: $WORK"' EXIT
-until [ -f "$HERMES_HOME/hub.json" ]; do sleep 0.2; done
-HUB=$(jq -r .url "$HERMES_HOME/hub.json")
+until [ -f "$HERMES_HUB_HOME/hub.json" ]; do sleep 0.2; done
+HUB=$(jq -r .url "$HERMES_HUB_HOME/hub.json")
 echo "Hub: $HUB"
 
 PROJ="$WORK/proj"
@@ -46,7 +40,7 @@ git -C "$PROJ" init -q
 printf '# billing-service\n\nA small Node service. It has no logging yet.\n' > "$PROJ/README.md"
 git -C "$PROJ" add README.md
 git -C "$PROJ" -c user.name=live -c user.email=live@example.invalid commit -qm init
-(cd "$PROJ" && hermes skill install)
+(cd "$PROJ" && "$HH" skill install)
 
 TASK="This project needs a logging library, pino or winston, and that choice belongs to the Human, not you. Ask the Human through Hermes Hub (you recommend pino), wait for their Answer, then write the id of the option they chose, alone, to choice.txt in the project root, and stop."
 
@@ -109,19 +103,19 @@ case "$MODE" in
     AGENT_PID=$!
     human "$AGENT_PID" "$WORK/codex.err"
     wait "$AGENT_PID" || echo "codex exited with $?"
-    echo "== Codex's commands (one hermes ask, no hermes wait/inbox loop, no sleep = no polling)"
+    echo "== Codex's commands (one hermes-hub ask, no hermes-hub wait/inbox loop, no sleep = no polling)"
     jq -r 'select(.type == "item.completed" and .item.type == "command_execution") | .item.command' "$WORK/codex.jsonl"
-    echo "== hermes ask: $(jq -r 'select(.type == "item.completed" and .item.type == "command_execution") | .item.command' "$WORK/codex.jsonl" | grep -c 'hermes ask' || true)," \
-      "hermes wait/inbox: $(jq -r 'select(.type == "item.completed" and .item.type == "command_execution") | .item.command' "$WORK/codex.jsonl" | grep -cE 'hermes (wait|inbox)' || true)"
+    echo "== hermes-hub ask: $(jq -r 'select(.type == "item.completed" and .item.type == "command_execution") | .item.command' "$WORK/codex.jsonl" | grep -c 'hermes-hub ask' || true)," \
+      "hermes-hub wait/inbox: $(jq -r 'select(.type == "item.completed" and .item.type == "command_execution") | .item.command' "$WORK/codex.jsonl" | grep -cE 'hermes-hub (wait|inbox)' || true)"
     verdict
     ;;
   claude)
-    # What `hermes setup claude` registers (claude mcp add --scope user hermes -- hermes mcp), passed
-    # per run instead so the user-scope config stays untouched.
-    printf '{"mcpServers":{"hermes":{"type":"stdio","command":"hermes","args":["mcp"]}}}\n' > "$WORK/mcp.json"
+    # What `hermes-hub setup claude` registers (claude mcp add --scope user hermes-hub -- <clone>/bin/hermes-hub mcp),
+    # passed per run instead so the user-scope config stays untouched.
+    printf '{"mcpServers":{"hermes-hub":{"type":"stdio","command":"%s","args":["mcp"]}}}\n' "$HH" > "$WORK/mcp.json"
     cd "$PROJ"
     clean_env claude -p --mcp-config "$WORK/mcp.json" --strict-mcp-config \
-      --allowedTools "mcp__hermes__hermes_ask,mcp__hermes__hermes_wait,mcp__hermes__hermes_inbox,mcp__hermes__hermes_cancel,Write" \
+      --allowedTools "mcp__hermes-hub__hermes_ask,mcp__hermes-hub__hermes_wait,mcp__hermes-hub__hermes_inbox,mcp__hermes-hub__hermes_cancel,Write" \
       --output-format stream-json --verbose "$TASK" > "$WORK/claude.jsonl" 2> "$WORK/claude.err" &
     AGENT_PID=$!
     human "$AGENT_PID" "$WORK/claude.jsonl"
@@ -132,10 +126,10 @@ case "$MODE" in
     ;;
   omp)
     cat << EOF
-== Hand this to an omp agent (the project has the Skill installed; hermes is $WORK/bin/hermes):
+== Hand this to an omp agent (the project has the Skill installed; it names $HH by path):
 
 Work in $PROJ. Read and follow the skill at $PROJ/.agents/skills/hermes-hub/SKILL.md for anything
-that involves the Human. Run every shell command with PATH=$WORK/bin:\$PATH so that \`hermes\` resolves.
+that involves the Human. Run omp from a shell with HERMES_HUB_HOME=$HERMES_HUB_HOME exported.
 $TASK
 
 == The Human answers the first Round $ANSWER_AFTER s after it arrives; this script then waits for choice.txt.

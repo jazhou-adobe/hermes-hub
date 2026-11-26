@@ -5,7 +5,7 @@ export interface LockInfo {
   url: string;
 }
 
-function pidAlive(pid: number): boolean {
+export function pidAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
@@ -50,7 +50,7 @@ export function releaseLock(path: string): void {
   rmSync(path, { force: true });
 }
 
-/** For `hermes restore`: is a Hub currently running on this data folder? */
+/** For `hermes-hub restore`, `start` and `stop`: is a Hub currently running on this data folder? */
 export function runningHub(path: string): LockInfo | null {
   const holder = readLockFile(path);
   return holder && pidAlive(holder.pid) ? holder : null;

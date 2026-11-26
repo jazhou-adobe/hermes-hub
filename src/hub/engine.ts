@@ -137,6 +137,8 @@ export interface ConfigStatus {
 }
 
 export interface StorageInfo {
+  /** The database file, in the Hub's data folder; empty for an in-memory database. */
+  db_path: string;
   db_bytes: number;
   /** Bytes of Attachment content across every stored Round (their share of the database). */
   attachment_bytes: number;
@@ -485,7 +487,7 @@ export class Engine {
       try {
         this.askAdvisor(id, rule.advisor, rule.brief, "auto");
       } catch (err) {
-        console.error(`hermes hub: auto-ask rule for Advisor "${rule.advisor}" failed to start on Round ${id}:`, err);
+        console.error(`hermes-hub hub: auto-ask rule for Advisor "${rule.advisor}" failed to start on Round ${id}:`, err);
       }
     }
     return { round_id: id, url: this.roundUrl(id), status: "pending", replay: false };
@@ -958,7 +960,8 @@ export class Engine {
         attachment_bytes += Buffer.byteLength(a.kind === "image" ? a.data : a.kind === "link" ? a.url : a.content);
       }
     }
-    return { db_bytes: this.dbSizeBytes(), attachment_bytes, rounds: rows.length };
+    const db_path = this.db.filename === ":memory:" ? "" : this.db.filename;
+    return { db_path, db_bytes: this.dbSizeBytes(), attachment_bytes, rounds: rows.length };
   }
 
   // ── Policies ────────────────────────────────────────────────────────────

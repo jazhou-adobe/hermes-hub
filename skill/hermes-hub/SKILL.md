@@ -1,15 +1,16 @@
 ---
 name: hermes-hub
-description: Ask the Human a decision through Hermes Hub and get their Answer back. Use when you reach a decision you cannot or should not make alone (a trade-off the Human owns, an approval before a risky or visible action, an ambiguous requirement), after resuming a session that may have Answers waiting, or when a hermes command fails.
+description: Ask the Human a decision through Hermes Hub and get their Answer back. Use when you reach a decision you cannot or should not make alone (a trade-off the Human owns, an approval before a risky or visible action, an ambiguous requirement), after resuming a session that may have Answers waiting, or when a hermes-hub command fails.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
 ---
 
 # Hermes Hub: ask the Human, get the Answer
 
 The Human answers every Agent's questions from one Command Center in the browser. You send a
-**Round** (one or more Questions) with the `hermes` CLI, and get back one **Answer** for the
-whole Round. `hermes` finds the Hub by itself; never hard-code its address or port.
+**Round** (one or more Questions) with the `{{hermes-hub}}` CLI, and get back one **Answer**
+for the whole Round. Always run it by that full path. It finds the Hub by itself; never
+hard-code the Hub's address or port.
 
 ## 1. When to ask
 
@@ -83,54 +84,54 @@ Every kind's fields, every Attachment kind, and every Answer value shape:
 **Default:** submit and wait in one command, run as a **background job** (recipes in §4):
 
 ```bash
-hermes ask /tmp/hermes-<topic>/round1.json --label <label> --out /tmp/hermes-<topic>/answer1.json
+{{hermes-hub}} ask /tmp/hermes-<topic>/round1.json --label <label> --out /tmp/hermes-<topic>/answer1.json
 ```
 
 - It prints `ROUND <round-id> <url>` at once; give the Human the url. When the Round ends it
   prints `ANSWER {…}` on one line and writes the same JSON to `--out`. Read the Answer from the
   `--out` file: a long line in tool output can get cut off, the file never is.
 - Until that job finishes, do nothing else on that decision, and **never poll**: no
-  `hermes wait` or `hermes inbox` in a loop, no `sleep`, no re-reading the file on a timer. The
-  job ending is the signal. The wait costs nothing; `hermes` holds the line to the Hub and
+  `{{hermes-hub}} wait` or `{{hermes-hub}} inbox` in a loop, no `sleep`, no re-reading the file on a
+  timer. The job ending is the signal. The wait costs nothing; the command holds the line to the Hub and
   rides out Hub restarts.
 - Do unrelated work meanwhile if there is any. Otherwise wait for the job the way your client
   waits for background jobs.
 
 **Async, only when you have independent work that outlasts the decision:**
-`hermes ask round.json --label <label> --no-wait` prints only the `ROUND` line. Keep the
-round id. Later, run `hermes wait <round-id> --label <label> --out answer.json` (as a
-background job too), or `hermes inbox` once.
+`{{hermes-hub}} ask round.json --label <label> --no-wait` prints only the `ROUND` line. Keep the
+round id. Later, run `{{hermes-hub}} wait <round-id> --label <label> --out answer.json` (as a
+background job too), or `{{hermes-hub}} inbox` once.
 
 **Changing a Round:** write the new Round and run
-`hermes ask round2.json --label <label> --supersedes <round-id> --out answer2.json`. The Hub
+`{{hermes-hub}} ask round2.json --label <label> --supersedes <round-id> --out answer2.json`. The Hub
 cancels the old Round and puts the new one in its place. Never resubmit the same decision
 without `--supersedes`. If the old Round already ended, you get `round_ended` with its
-`outcome`: collect that Answer with `hermes wait <round-id>`.
+`outcome`: collect that Answer with `{{hermes-hub}} wait <round-id>`.
 
-**Dropping a Round:** `hermes cancel <round-id>` when the decision no longer matters.
+**Dropping a Round:** `{{hermes-hub}} cancel <round-id>` when the decision no longer matters.
 
 **After resuming a session**, or whenever unsure whether Answers arrived while you were away:
-run `hermes inbox --label <label>` once. It prints one `ANSWER` line per Answer you have not
+run `{{hermes-hub}} inbox --label <label>` once. It prints one `ANSWER` line per Answer you have not
 picked up (`--format json` for one JSON document). The Hub keeps them until you do.
 
 ## 4. Per-client recipes
 
-- **omp:** run `hermes ask …` with the `bash` tool, `async: true` and `timeout: 0` (a Round
+- **omp:** run `{{hermes-hub}} ask …` with the `bash` tool, `async: true` and `timeout: 0` (a Round
   can take longer than the default deadline). The result arrives by itself as a follow-up
   message. With nothing else to do, call `wait` on that job.
-- **Codex:** run `hermes ask …` with your shell tool. Once it outlives the yield time it keeps
+- **Codex:** run `{{hermes-hub}} ask …` with your shell tool. Once it outlives the yield time it keeps
   running in a background terminal: wait on that same session (`write_stdin` with empty input
   and the longest `yield_time_ms`) until it exits. Reading the job's own output is waiting, not
-  polling; never start a second `hermes ask` or `hermes wait` for the same Round. Under the
+  polling; never start a second `{{hermes-hub}} ask` or `{{hermes-hub}} wait` for the same Round. Under the
   `workspace-write` sandbox the network is off until the Human allows it: on `hub_unavailable`,
   see §6.
-- **Cursor:** run `hermes ask …` as a background shell command, then wait on it with the
+- **Cursor:** run `{{hermes-hub}} ask …` as a background shell command, then wait on it with the
   await-shell tool until it exits.
-- **VS Code Copilot:** run `hermes ask …` in a background terminal (`isBackground: true`); VS
+- **VS Code Copilot:** run `{{hermes-hub}} ask …` in a background terminal (`isBackground: true`); VS
   Code tells you when it exits. Without that notice, run it in the foreground with no timeout.
 - **Claude Code:** use the `hermes_ask`, `hermes_wait`, `hermes_cancel` and `hermes_inbox` MCP
-  tools (the Human registers them with `hermes setup claude`); their descriptions carry these
-  rules. Without them, run `hermes ask …` with Bash `run_in_background: true`.
+  tools (the Human registers them with `{{hermes-hub}} setup claude`); their descriptions carry these
+  rules. Without them, run `{{hermes-hub}} ask …` with Bash `run_in_background: true`.
 
 ## 5. Reading the Answer
 
@@ -165,11 +166,11 @@ Failures print `ERROR <code> <message> {details}` and exit non-zero:
 | Exit | `code` | Do |
 |---|---|---|
 | 2 | (usage) | Fix the command line. |
-| 3 | `hub_unavailable` | The Hub is down, or your sandbox blocks `127.0.0.1`. Tell the Human: start `hermes hub`, and run `hermes doctor` for this client's sandbox setting. Do not retry in a loop. |
+| 3 | `hub_unavailable` | The Hub is down, or your sandbox blocks `127.0.0.1`. Tell the Human: start it with `{{hermes-hub}} start`, and run `{{hermes-hub}} doctor` for this client's sandbox setting. Do not retry in a loop. |
 | 4 | `invalid_round` | Fix the Round at each `errors[].pointer`, then ask again. |
 | 4 | `too_large` | Shrink the attachment at `pointer` below `limit`. |
 | 4 | `flood_cap` | Too many pending Rounds: wait for an existing Answer first (`oldest_round_id`), then ask. |
-| 4 | `round_ended` | The Round you superseded or cancelled already ended: collect it with `hermes wait`. |
+| 4 | `round_ended` | The Round you superseded or cancelled already ended: collect it with `{{hermes-hub}} wait`. |
 | 4 | `idempotency_conflict` | Same `idempotency_key`, different body: use a new key. |
 | 4 | `not_found`, `unsupported_schema`, `advisor_cannot_ask` | Wrong round id (or another session's Round); a schema other than `hermes.round/v1`; you are an Advisor run (see §8). |
 | 5 | `unknown_session`, `forbidden` | Report it to the Human. |
@@ -179,17 +180,17 @@ command: pass it on to the Human once.
 
 ## 7. Identity
 
-- Pass `--label <label>` on every `hermes` command (or set `HERMES_LABEL`): a short name for
+- Pass `--label <label>` on every `{{hermes-hub}}` command (or set `HERMES_LABEL`): a short name for
   your task, the same for the whole conversation. The Human sees you as `KIND·label`.
 - Your kind and session are detected; pass `--kind` or `--session` only when the Human asks.
-- `HERMES_HUB_URL` points `hermes` at a Hub on a non-default address; set it only when the
+- `HERMES_HUB_URL` points `{{hermes-hub}}` at a Hub on a non-default address; set it only when the
   Human tells you to.
 
 ## 8. Rules
 
 - When `HERMES_ADVISOR` is set you are an Advisor run: never ask; the Hub refuses it anyway.
-- Reach the Hub only through the `hermes` commands above (on Claude Code, the `hermes_*` MCP
+- Reach the Hub only through the `{{hermes-hub}}` commands above (on Claude Code, the `hermes_*` MCP
   tools), plus `GET /v1/hub` for its limits. The Human alone answers Rounds, in the Command
   Center.
-- One decision, one live Round: change it with `--supersedes`, collect it with `hermes wait`
-  or `hermes inbox`, never by asking again.
+- One decision, one live Round: change it with `--supersedes`, collect it with `{{hermes-hub}} wait`
+  or `{{hermes-hub}} inbox`, never by asking again.

@@ -42,7 +42,7 @@ An **Agent session** is one conversation of one Agent, keyed by **(kind, session
 
 ## `POST /v1/sessions`
 
-The CLI calls it **on every run**; it is idempotent on (kind, session key). There is **no token cache on disk**. The shim and `hermes watch` keep the token in memory.
+The CLI calls it **on every run**; it is idempotent on (kind, session key). There is **no token cache on disk**. The shim and `hermes-hub watch` keep the token in memory.
 
 ```json
 {
@@ -94,10 +94,10 @@ A rule matches on **kind + project**, where the project is the git root, or the 
 The CLI and the shim resolve the Hub URL in this order:
 
 1. `HERMES_HUB_URL`
-2. `<hermes's own clone>/.hermes/hub.json`, which `hermes hub` writes at start as `{url, version, pid, started_at}`. The `hermes` command knows the clone it was linked from. The file is ignored if that pid is no longer running ([operations](hub-operations.md); there is no `~/.hermes`).
+2. `$HERMES_HUB_HOME/hub.json`, when `HERMES_HUB_HOME` is set; the Hub (`hermes-hub hub` or `start`) writes it at start as `{url, version, pid, started_at}`. The file is ignored if that pid is no longer running. The current folder is never consulted: Agents run in their own projects ([operations](hub-operations.md); there is no `~/.hermes`).
 3. The default, `http://127.0.0.1:4747`. The port is set in `config.toml`.
 
-Where a sandbox blocks reading the clone, `HERMES_HUB_URL` or the default applies.
+Where a sandbox blocks reading `HERMES_HUB_HOME`, `HERMES_HUB_URL` or the default applies.
 
 ## Changes to other specs
 

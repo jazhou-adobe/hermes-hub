@@ -151,7 +151,7 @@ function AgentCard({ agent, onForget }: { agent: AgentView; onForget: (a: AgentV
                   <div className="hh-popover" id={`why-${agent.id}`} role="group" aria-label="Why the detected kind may be wrong" hidden={!why}>
                     <p className="hh-body-sm">
                       The client does not document this marker. It was found in its source or through observation, and another client can set the same
-                      marker. If this kind looks wrong, run <span className="hh-mono-sm">hermes doctor</span> or set <span className="hh-mono-sm">--kind</span>.
+                      marker. If this kind looks wrong, run <span className="hh-mono-sm">hermes-hub doctor</span> or set <span className="hh-mono-sm">--kind</span>.
                     </p>
                   </div>
                 </div>

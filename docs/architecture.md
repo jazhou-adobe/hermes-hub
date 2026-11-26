@@ -9,8 +9,8 @@ The Hub is a single Bun process listening on loopback (`127.0.0.1:4747` by defau
 ```mermaid
 flowchart LR
   subgraph Agents["Agents (separate processes on the Mac)"]
-    CLI["hermes CLI<br/>ask / wait / cancel / inbox / watch"]
-    SHIM["hermes mcp<br/>stdio MCP shim"]
+    CLI["hermes-hub CLI<br/>ask / wait / cancel / inbox / watch"]
+    SHIM["hermes-hub mcp<br/>stdio MCP shim"]
     HTTPMCP["MCP clients via URL"]
   end
 
@@ -18,9 +18,9 @@ flowchart LR
   SKILL["Hub Skill<br/>.agents/skills/hermes-hub"]
   SKILL -. teaches .-> CLI
 
-  subgraph Hub["hermes hub (one Bun process, 127.0.0.1:4747)"]
+  subgraph Hub["hermes-hub hub / start (one Bun process, 127.0.0.1:4747)"]
     GUARD["Browser guard<br/>Host allowlist, Origin,<br/>Fetch-Metadata, JSON-only, CSP"]
-    V1["/v1/* Agent API<br/>sessions, rounds, wait, cancel,<br/>inbox, events (SSE)"]
+    V1["/v1/* Agent API<br/>sessions, rounds, wait, cancel,<br/>inbox, events (SSE), projects"]
     MCPR["/mcp<br/>Streamable HTTP"]
     CCAPI["/cc/* Human API<br/>feed, draft, send, dismiss,<br/>redirect, advisor, log, settings,<br/>events (SSE)"]
     UI["SPA bundle<br/>built from web/ at start"]
@@ -31,8 +31,8 @@ flowchart LR
     BK["daily backup"]
   end
 
-  DB[("SQLite .hermes/hub.db<br/>sessions, rounds, question_deadlines,<br/>advisor_runs, log_fts, settings")]
-  FILES[".hermes/<br/>hub.json, hub.lock,<br/>config.toml, projects.json"]
+  DB[("SQLite hub.db<br/>sessions, rounds, question_deadlines,<br/>advisor_runs, log_fts, settings")]
+  FILES["Data folder: $HERMES_HUB_HOME<br/>or where the Hub started<br/>hub.db, hub.json, hub.lock, config.toml,<br/>projects.json, logs/, backups/"]
   ADVPROC["Advisor CLI process<br/>claude, codex, and others"]
 
   CLI -- "HTTP + session token" --> GUARD
@@ -49,14 +49,15 @@ flowchart LR
   ADVPROC -- "stdout JSON Suggestion" --> ADV
   CFGW --> ENG
   BK --> DB
-  CLI -. "finds the Hub via HERMES_HUB_URL,<br/>then hub.json, then :4747" .-> FILES
+  ENG -. "reads and writes" .-> FILES
+  CLI -. "HERMES_HUB_URL, then $HERMES_HUB_HOME/hub.json,<br/>then :4747 (never the cwd)" .-> FILES
 ```
 
 | Piece | Process | Code |
 |---|---|---|
-| Hub: HTTP server, Engine, SQLite, Advisor runner, Notifier | `hermes hub` | `src/hub/` |
+| Hub: HTTP server, Engine, SQLite, Advisor runner, Notifier | `hermes-hub hub` (foreground) or `hermes-hub start` (detached) | `src/hub/` |
 | Command Center | the browser, loaded from the Hub | `web/src/` |
-| Agents: the `hermes` CLI, the `hermes mcp` shim | one process per Agent command or session | `src/cli/`, `src/mcp/` |
+| Agents: the `hermes-hub` CLI, the `hermes-hub mcp` shim | one process per Agent command or session | `src/cli/`, `src/mcp/` |
 | Advisor runs | one child process per run, started by the Hub | configured in `config.toml` |
 
 ### The doors
@@ -251,7 +252,9 @@ Every value is `set_by: "human"`. `suggested_by` appears only where the Human se
 
 ## Running the Hub
 
-`hermes hub` (`src/hub/run.ts`):
+The only entry point is the wrapper `bin/hermes-hub` in the clone (`exec bun <clone>/src/cli/main.ts "$@"`), run by its path; there is no global install. `hermes-hub hub` runs the Hub in the foreground; `hermes-hub start` runs the same Hub detached in the data folder, waits until `hub.json` is written, and sends its output to `logs/hub.out` (exit 1 with that output if the Hub exits early, or if a Hub already runs there). `hermes-hub stop` sends SIGTERM to the Hub holding `hub.lock` and waits up to 15 s.
+
+The Hub (`src/hub/run.ts`):
 
 - **Startup:**
   1. Refuses to start while migrations are pending.
@@ -259,6 +262,16 @@ Every value is `set_by: "human"`. `suggested_by` appears only where the Human se
   3. Tries up to 20 ports from the configured one.
   4. Writes `hub.json` so the CLI and shim can find it.
 - **While running:** hot-reloads `config.toml`, makes a daily backup, and refreshes uncommitted Hub Skill copies.
+
+### The data folder
+
+Every Hub file sits directly in one folder (`src/paths.ts`): `HERMES_HUB_HOME` when set, otherwise the folder the command was started in, captured once at process start so the development server's `chdir` can't move it. The Hub-side commands (`migrate`, `start`, `stop`, `hub`, `config`, `backup`, `restore`) use it directly.
+
+Agent-side commands run in the Agent's project, so they never read the current folder:
+
+- **Finding the Hub** (`src/cli/discovery.ts`): `HERMES_HUB_URL`, then `$HERMES_HUB_HOME/hub.json` when set (ignored if its pid is dead), then `http://127.0.0.1:4747`.
+- **`projects.json`** for `hermes-hub skill` and `doctor` goes through a `ProjectStore` (`src/cli/skill.ts`). That is the file when `HERMES_HUB_HOME` is set, otherwise the running Hub's `/v1/projects` routes, which keep the file in the Hub's own folder (`HubClient.projects()`). `skill install` records first, so no Hub means nothing is copied into the project.
+- **Finding the command.** `hermes-hub` is never on PATH. Agents get the wrapper's absolute path from their rendered Skill copy (`skill install`/`update` replace `{{hermes-hub}}` with it) and Claude Code from `setup claude`'s MCP registration (`hermes-hub -- <clone>/bin/hermes-hub mcp`). Callers outside this repo (friendly-grill, scripts) use `"$HERMES_HUB_APP/hermes-hub"`; the Human sets `HERMES_HUB_APP` to `<clone>/bin` in their shell profile, and `doctor` checks it (`APP_DIR` in `src/paths.ts`).
 
 SQLite tables (`src/db/migrations/`):
 

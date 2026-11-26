@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Hermes Hub's CLI wrapper: run it by its path (or a symlink to it); nothing is installed globally.
+set -euo pipefail
+src=${BASH_SOURCE[0]}
+while [ -L "$src" ]; do
+  dir=$(cd -P "$(dirname "$src")" && pwd)
+  src=$(readlink "$src")
+  [[ $src == /* ]] || src=$dir/$src
+done
+root=$(cd -P "$(dirname "$src")/.." && pwd)
+exec bun "$root/src/cli/main.ts" "$@"

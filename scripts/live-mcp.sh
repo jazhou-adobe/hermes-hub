@@ -5,7 +5,7 @@
 #                                resumed session receives the Answer (needs `claude` logged in).
 #   scripts/live-mcp.sh codex    Codex with its default 60 s tool_timeout_sec gets `pending` at 50 s
 #                                and re-calls hermes_wait (needs `codex` logged in).
-#   scripts/live-mcp.sh replay   Codex 0.133's captured wire replayed through `hermes mcp` with a
+#   scripts/live-mcp.sh replay   Codex 0.133's captured wire replayed through `hermes-hub mcp` with a
 #                                60 s deadline per call (no login needed).
 #
 # Your own Claude Code and Codex config are untouched: the shim is passed with --mcp-config /
@@ -15,24 +15,24 @@ set -euo pipefail
 MODE=${1:?usage: scripts/live-mcp.sh claude|codex|replay}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 WORK=$(mktemp -d /tmp/hermes-live-mcp.XXXXXX)
-export HERMES_HOME="$WORK/home"
-mkdir -p "$HERMES_HOME" "$WORK/proj"
-printf 'port = %s\n' "${HERMES_LIVE_PORT:-4798}" > "$HERMES_HOME/config.toml"
+export HERMES_HUB_HOME="$WORK/home"
+mkdir -p "$HERMES_HUB_HOME" "$WORK/proj"
+printf 'port = %s\n' "${HERMES_LIVE_PORT:-4798}" > "$HERMES_HUB_HOME/config.toml"
 git -C "$WORK/proj" init -q
 
-bun "$ROOT/src/cli/main.ts" migrate > /dev/null
-bun "$ROOT/src/cli/main.ts" hub > "$WORK/hub.log" 2>&1 &
+"$ROOT/bin/hermes-hub" migrate > /dev/null
+"$ROOT/bin/hermes-hub" hub > "$WORK/hub.log" 2>&1 &
 HUB_PID=$!
 trap 'kill "$HUB_PID" 2> /dev/null || true; echo "work dir: $WORK"' EXIT
-until [ -f "$HERMES_HOME/hub.json" ]; do sleep 0.2; done
-HUB=$(jq -r .url "$HERMES_HOME/hub.json")
+until [ -f "$HERMES_HUB_HOME/hub.json" ]; do sleep 0.2; done
+HUB=$(jq -r .url "$HERMES_HUB_HOME/hub.json")
 echo "Hub: $HUB"
 
-# The shim, with every line between the client and `hermes mcp` traced.
+# The shim, with every line between the client and `hermes-hub mcp` traced.
 cat > "$WORK/shim.sh" << EOF
 #!/usr/bin/env bash
 export HERMES_HUB_URL=$HUB
-tee -a "$WORK/trace.in.jsonl" | bun "$ROOT/src/cli/main.ts" mcp | tee -a "$WORK/trace.out.jsonl"
+tee -a "$WORK/trace.in.jsonl" | "$ROOT/bin/hermes-hub" mcp | tee -a "$WORK/trace.out.jsonl"
 EOF
 chmod +x "$WORK/shim.sh"
 
@@ -68,8 +68,8 @@ ASK='Use the hermes MCP server'"'"'s hermes_ask tool to ask the Human one decisi
 
 case "$MODE" in
   claude)
-    printf '{"mcpServers":{"hermes":{"type":"stdio","command":"%s","args":[]}}}\n' "$WORK/shim.sh" > "$WORK/mcp.json"
-    TOOLS=(mcp__hermes__hermes_ask mcp__hermes__hermes_wait mcp__hermes__hermes_inbox mcp__hermes__hermes_cancel)
+    printf '{"mcpServers":{"hermes-hub":{"type":"stdio","command":"%s","args":[]}}}\n' "$WORK/shim.sh" > "$WORK/mcp.json"
+    TOOLS=(mcp__hermes-hub__hermes_ask mcp__hermes-hub__hermes_wait mcp__hermes-hub__hermes_inbox mcp__hermes-hub__hermes_cancel)
     cd "$WORK/proj"
     echo "== run 1: ask, then exit"
     clean_env claude -p --mcp-config "$WORK/mcp.json" --strict-mcp-config --allowedTools "${TOOLS[@]}" --output-format json \
@@ -104,7 +104,7 @@ case "$MODE" in
     ;;
   codex)
     cd "$WORK/proj"
-    clean_env codex exec --skip-git-repo-check -C "$WORK/proj" --json -c "mcp_servers.hermes.command=\"$WORK/shim.sh\"" \
+    clean_env codex exec --skip-git-repo-check -C "$WORK/proj" --json -c "mcp_servers.hermes-hub.command=\"$WORK/shim.sh\"" \
       "$ASK If it returns status pending, call hermes_wait with the round_id, again and again, until you get the Answer. Then reply only ANSWER <selected option id>." \
       > "$WORK/codex.jsonl" &
     CODEX_PID=$!

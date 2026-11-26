@@ -16,7 +16,7 @@ Markdown or HTML; *Markdown* fields are CommonMark with raw HTML stripped.
 | `links` | | at most 10 `{url, label?}` |
 | `attachments` | | at most 20, shared by all Questions |
 | `idempotency_key` | | same key and same body returns the Round already submitted; same key with another body is `idempotency_conflict` |
-| `supersedes` | | set by `hermes ask --supersedes <round-id>`; leave it out of the file |
+| `supersedes` | | set by `{{hermes-hub}} ask --supersedes <round-id>`; leave it out of the file |
 
 ## Question, common fields
 

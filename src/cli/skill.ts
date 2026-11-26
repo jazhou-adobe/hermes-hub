@@ -1,6 +1,6 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { projectsPath, SKILL_SOURCE } from "../paths.ts";
+import { projectsPath, SKILL_SOURCE, WRAPPER } from "../paths.ts";
 import { VERSION } from "../version.ts";
 
 /** Where a project's copy of the Hub Skill lives, relative to its git root (hub-skill spec). */
@@ -54,12 +54,29 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-/** The runtime check: one WARN line when the project's copy is older than this `hermes`. */
+/** The runtime check: one WARN line when the project's copy is older than this `hermes-hub`. */
 export function staleSkillWarning(root: string | null | undefined): string | undefined {
   if (!root) return undefined;
   const version = skillVersion(skillFile(root));
   if (version === undefined || compareVersions(version, VERSION) >= 0) return undefined;
-  return `WARN hermes-hub skill ${version} < ${VERSION} · run hermes skill update`;
+  return `WARN hermes-hub skill ${version} < ${VERSION} · run hermes-hub skill update`;
+}
+
+/** Where the shipped Skill names the command; each project copy gets the wrapper's absolute path instead. */
+export const SKILL_COMMAND = "{{hermes-hub}}";
+
+/** A path as one shell word: bare when it has no special characters, otherwise single-quoted. */
+export function shellWord(path: string): string {
+  return /^[\w@%+=:,./-]+$/.test(path) ? path : `'${path.replaceAll("'", `'\\''`)}'`;
+}
+
+/** Replaces every placeholder in the copy's Markdown files, so Agents run this clone's wrapper by path. */
+function renderCopy(dir: string, command: string): void {
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) renderCopy(path, command);
+    else if (name.endsWith(".md")) writeFileSync(path, readFileSync(path, "utf8").replaceAll(SKILL_COMMAND, command));
+  }
 }
 
 /** The repository's own `info/exclude` (shared by linked worktrees). */
@@ -91,29 +108,48 @@ function setExcluded(root: string, excluded: boolean): void {
   }
 }
 
-export function readProjects(): ProjectRecord[] {
+/**
+ * Where `projects.json` is kept: the file in `HERMES_HUB_HOME` (and in the Hub's own process), or
+ * the running Hub over HTTP when an Agent-side command does not know the Hub's folder.
+ */
+export interface ProjectStore {
+  list(): Promise<ProjectRecord[]>;
+  record(project: ProjectRecord): Promise<void>;
+  forget(root: string): Promise<void>;
+}
+
+export function isProjectRecord(p: unknown): p is ProjectRecord {
+  return typeof p === "object" && p !== null && "root" in p && typeof p.root === "string" && "committed" in p && typeof p.committed === "boolean";
+}
+
+function readProjectsFile(file: string): ProjectRecord[] {
   let doc: unknown;
   try {
-    doc = JSON.parse(readFileSync(projectsPath(), "utf8"));
+    doc = JSON.parse(readFileSync(file, "utf8"));
   } catch {
     return [];
   }
   const list = (doc as { projects?: unknown } | null)?.projects;
-  if (!Array.isArray(list)) return [];
-  return list.filter(
-    (p): p is ProjectRecord => typeof p === "object" && p !== null && typeof p.root === "string" && typeof p.committed === "boolean",
-  );
+  return Array.isArray(list) ? list.filter(isProjectRecord) : [];
 }
 
-function writeProjects(projects: ProjectRecord[]): void {
-  const file = projectsPath();
+function writeProjectsFile(file: string, projects: ProjectRecord[]): void {
   mkdirSync(dirname(file), { recursive: true });
   const sorted = [...projects].sort((a, b) => a.root.localeCompare(b.root));
   writeFileSync(file, `${JSON.stringify({ projects: sorted }, null, 2)}\n`);
 }
 
-function recordProject(root: string, committed: boolean): void {
-  writeProjects([...readProjects().filter((p) => p.root !== root), { root, committed }]);
+/** `projects.json` in the Hub's data folder (`projectsPath()`), read fresh on every call. */
+export function fileProjects(file = projectsPath()): ProjectStore {
+  return {
+    list: async () => readProjectsFile(file),
+    async record(project) {
+      writeProjectsFile(file, [...readProjectsFile(file).filter((p) => p.root !== project.root), project]);
+    },
+    async forget(root) {
+      writeProjectsFile(file, readProjectsFile(file).filter((p) => p.root !== root));
+    },
+  };
 }
 
 /** Replaces the copy wholesale, so files dropped from the Skill disappear from the project too. */
@@ -122,13 +158,14 @@ function writeCopy(root: string): void {
   rmSync(dest, { recursive: true, force: true });
   mkdirSync(dirname(dest), { recursive: true });
   cpSync(SKILL_SOURCE, dest, { recursive: true });
+  renderCopy(dest, shellWord(WRAPPER));
 }
 
-/** `hermes skill install`: copy, exclude unless committed, record. Returns the line to print. */
-export function installSkill(root: string, committed: boolean): string {
+/** `hermes-hub skill install`: record, copy, exclude unless committed. Returns the line to print. */
+export async function installSkill(store: ProjectStore, root: string, committed: boolean): Promise<string> {
+  await store.record({ root, committed }); // first: without a reachable Hub, nothing lands in the project
   writeCopy(root);
   setExcluded(root, !committed);
-  recordProject(root, committed);
   const where = join(root, SKILL_DIR);
   return committed
     ? `installed hermes-hub skill ${VERSION} in ${where} (to commit: git -C ${root} add ${SKILL_DIR})`
@@ -158,27 +195,27 @@ export function findRepos(folder: string): string[] {
 }
 
 /** Refreshes one project's copy, keeping its recorded (or detected) committed state. */
-function refreshCopy(root: string, record: ProjectRecord | undefined): string {
+async function refreshCopy(store: ProjectStore, root: string, record: ProjectRecord | undefined): Promise<string> {
   const before = skillVersion(skillFile(root)) ?? "unknown";
   writeCopy(root);
-  recordProject(root, record?.committed ?? !isExcluded(root));
+  await store.record({ root, committed: record?.committed ?? !isExcluded(root) });
   return `updated hermes-hub skill in ${root} (${before} → ${VERSION})`;
 }
 
-/** `hermes skill update` in one project; throws when the project has no copy. */
-export function updateSkill(root: string): string {
-  if (!existsSync(skillFile(root))) throw new Error(`no hermes-hub skill in ${root}; run hermes skill install`);
-  return refreshCopy(root, readProjects().find((p) => p.root === root));
+/** `hermes-hub skill update` in one project; throws when the project has no copy. */
+export async function updateSkill(store: ProjectStore, root: string): Promise<string> {
+  if (!existsSync(skillFile(root))) throw new Error(`no hermes-hub skill in ${root}; run hermes-hub skill install`);
+  return refreshCopy(store, root, (await store.list()).find((p) => p.root === root));
 }
 
-/** `hermes skill update --all`: every recorded copy; records whose copy is gone are dropped. */
-export function updateAllSkills(): string[] {
+/** `hermes-hub skill update --all`: every recorded copy; records whose copy is gone are dropped. */
+export async function updateAllSkills(store: ProjectStore): Promise<string[]> {
   const lines: string[] = [];
-  for (const record of readProjects()) {
+  for (const record of await store.list()) {
     if (!existsSync(skillFile(record.root))) {
-      writeProjects(readProjects().filter((p) => p.root !== record.root));
+      await store.forget(record.root);
       lines.push(`forgot ${record.root}: its hermes-hub skill copy is gone`);
-    } else lines.push(refreshCopy(record.root, record));
+    } else lines.push(await refreshCopy(store, record.root, record));
   }
   return lines;
 }
@@ -187,13 +224,13 @@ export function updateAllSkills(): string[] {
  * At Hub start: refreshes every recorded uncommitted copy whose version differs from this one.
  * Committed copies are left alone (they only get the CLI warning), so the Hub never makes a diff.
  */
-export function refreshUncommittedSkills(): string[] {
+export async function refreshUncommittedSkills(store: ProjectStore = fileProjects()): Promise<string[]> {
   const lines: string[] = [];
-  for (const record of readProjects()) {
+  for (const record of await store.list()) {
     if (record.committed) continue;
     const version = skillVersion(skillFile(record.root));
     if (version === undefined || version === VERSION) continue;
-    lines.push(refreshCopy(record.root, record));
+    lines.push(await refreshCopy(store, record.root, record));
   }
   return lines;
 }

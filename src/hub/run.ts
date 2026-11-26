@@ -36,7 +36,7 @@ function freePortFrom(start: number): number {
 }
 
 /**
- * `hermes hub`: refuses while migrations are pending, or while `hub.lock` is held by another live
+ * `hermes-hub hub` (and `start`, which runs it detached): refuses while migrations are pending, or while `hub.lock` is held by another live
  * Hub on this data folder. Otherwise finds the next free port from the configured one, fires
  * overdue policies, and serves until SIGINT/SIGTERM.
  */
@@ -44,11 +44,11 @@ export async function runHub(): Promise<number | undefined> {
   const db = openDb(dbPath());
   const status = migrationStatus(db);
   if (status.current > status.latest) {
-    console.error(`hermes hub: the database (version ${status.current}) is newer than this checkout (${status.latest})`);
+    console.error(`hermes-hub hub: the database (version ${status.current}) is newer than this checkout (${status.latest})`);
     return 1;
   }
   if (status.pending.length > 0) {
-    console.error("hermes hub: database migrations are pending; run hermes migrate");
+    console.error("hermes-hub hub: database migrations are pending; run hermes-hub migrate");
     return 1;
   }
 
@@ -59,12 +59,12 @@ export async function runHub(): Promise<number | undefined> {
   const lockPath = hubLockPath();
   const lock = acquireLock(lockPath, url);
   if (!lock.ok) {
-    console.error(`hermes hub: already running at ${lock.holder.url} (pid ${lock.holder.pid})`);
+    console.error(`hermes-hub hub: already running at ${lock.holder.url} (pid ${lock.holder.pid})`);
     db.close();
     return 1;
   }
 
-  const hubJson = hubJsonPath(); // resolved before the server may chdir: HERMES_HOME may be relative
+  const hubJson = hubJsonPath();
   const cfgPath = configPath();
   const engine = new Engine(db, url, undefined, config, logger);
   engine.setConfigSource(cfgPath);
@@ -97,7 +97,7 @@ export async function runHub(): Promise<number | undefined> {
       engine.setConfig(config, reload.restartNeeded);
       if (reload.restartNeeded) {
         logger.log("warn", "config.restart_needed", { setting: "port" });
-        console.warn("hermes hub: config.toml's port changed; restart needed to apply it");
+        console.warn("hermes-hub hub: config.toml's port changed; restart needed to apply it");
       } else {
         logger.log("info", "config.reloaded", {});
       }
@@ -105,7 +105,7 @@ export async function runHub(): Promise<number | undefined> {
     (err) => {
       engine.configFailed(err.message);
       logger.log("error", "config.invalid", { error: err.message });
-      console.error(`hermes hub: ${err.message}`);
+      console.error(`hermes-hub hub: ${err.message}`);
     },
   );
 
@@ -125,13 +125,13 @@ export async function runHub(): Promise<number | undefined> {
   console.log(`Hermes Hub ${VERSION} on ${url}`);
   // Hub Skill copies (hub-skill spec): only uncommitted ones, so the Hub never makes a surprise diff.
   try {
-    for (const line of refreshUncommittedSkills()) {
-      console.log(`hermes hub: ${line}`);
+    for (const line of await refreshUncommittedSkills()) {
+      console.log(`hermes-hub hub: ${line}`);
       logger.log("info", "skill.refreshed", {});
     }
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
-    console.error(`hermes hub: could not refresh the hermes-hub skill copies: ${error}`);
+    console.error(`hermes-hub hub: could not refresh the hermes-hub skill copies: ${error}`);
     logger.log("warn", "skill.refresh_failed", { error });
   }
   return undefined;

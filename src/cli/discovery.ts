@@ -11,10 +11,14 @@ function pidAlive(pid: number): boolean {
   }
 }
 
-/** HERMES_HUB_URL → `<clone>/.hermes/hub.json` (if its pid runs) → the default port. */
+/**
+ * HERMES_HUB_URL → `$HERMES_HUB_HOME/hub.json` (if set and its pid runs) → the default port. Never
+ * the current folder: Agents run in their own projects, not in the Hub's data folder.
+ */
 export function hubUrl(): string {
   const explicit = process.env.HERMES_HUB_URL;
   if (explicit) return explicit.replace(/\/+$/, "");
+  if (!process.env.HERMES_HUB_HOME) return `http://127.0.0.1:${DEFAULT_PORT}`;
   try {
     const info: unknown = JSON.parse(readFileSync(hubJsonPath(), "utf8"));
     if (

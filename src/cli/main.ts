@@ -15,27 +15,42 @@ import { HubClient } from "./client.ts";
 import { hubUrl } from "./discovery.ts";
 import { runDoctor } from "./doctor.ts";
 import { detectSession } from "./identity.ts";
+import { startHub, stopHub } from "./service.ts";
 import { setupClaude } from "./setup.ts";
-import { findRepos, gitRoot, installSkill, staleSkillWarning, updateAllSkills, updateSkill } from "./skill.ts";
+import { fileProjects, findRepos, gitRoot, installSkill, staleSkillWarning, updateAllSkills, updateSkill, type ProjectStore } from "./skill.ts";
 
-const USAGE = `usage:
-  hermes migrate                 create or upgrade the database
-  hermes hub                     start the Hub
-  hermes config                  print the effective settings and their source
-  hermes backup [path]           take a backup now (default: .hermes/backups/hub-manual-<timestamp>.db)
-  hermes restore <backup>        restore the database from a backup (the Hub must not be running)
-  hermes ask <file|-> [--no-wait] [--out <file>] [--supersedes <round-id>] [identity]
-  hermes wait <round-id> [--out <file>] [identity]
-  hermes cancel <round-id> [identity]
-  hermes inbox [--format lines|json] [identity]
-  hermes watch [identity]
-  hermes mcp [identity]          the stdio MCP shim (hermes_ask, hermes_wait, hermes_cancel, hermes_inbox)
-  hermes skill install [dir] [--commit]           copy the Hub Skill into <git root>/.agents/skills/hermes-hub
-  hermes skill install --all <folder> [--commit]  the same for every git repository under <folder>
-  hermes skill update [--all]    refresh this project's copy, or every recorded copy
-  hermes doctor                  check the Hub, the Skill and each client; print the sandbox settings
-  hermes setup claude            register the hermes mcp shim in Claude Code (asks first)
-identity: [--label <label>] [--kind <kind>] [--session <id>]`;
+const USAGE = `usage: bin/hermes-hub <command>   (run it by path; nothing is installed globally)
+  hermes-hub migrate                 create or upgrade the database
+  hermes-hub start                   start the Hub in the background (output in logs/hub.out)
+  hermes-hub stop                    stop the Hub running on this data folder
+  hermes-hub hub                     run the Hub in the foreground (Ctrl-C stops it)
+  hermes-hub config                  print the effective settings and their source
+  hermes-hub backup [path]           take a backup now (default: backups/hub-manual-<timestamp>.db in the Hub's folder)
+  hermes-hub restore <backup>        restore the database from a backup (the Hub must not be running)
+  hermes-hub ask <file|-> [--no-wait] [--out <file>] [--supersedes <round-id>] [identity]
+  hermes-hub wait <round-id> [--out <file>] [identity]
+  hermes-hub cancel <round-id> [identity]
+  hermes-hub inbox [--format lines|json] [identity]
+  hermes-hub watch [identity]
+  hermes-hub mcp [identity]          the stdio MCP shim (hermes_ask, hermes_wait, hermes_cancel, hermes_inbox)
+  hermes-hub skill install [dir] [--commit]           copy the Hub Skill into <git root>/.agents/skills/hermes-hub
+  hermes-hub skill install --all <folder> [--commit]  the same for every git repository under <folder>
+  hermes-hub skill update [--all]    refresh this project's copy, or every recorded copy
+  hermes-hub doctor                  check the Hub, the Skill and each client; print the sandbox settings
+  hermes-hub setup claude            register the hermes-hub MCP shim in Claude Code (asks first)
+identity: [--label <label>] [--kind <kind>] [--session <id>]
+
+The Hub's files (hub.db, config.toml, logs/, backups/, …) live in $HERMES_HUB_HOME, or the folder
+where you run migrate, start, stop, hub, config, backup or restore. Agent commands find the Hub through
+HERMES_HUB_URL, then $HERMES_HUB_HOME/hub.json, then http://127.0.0.1:4747.`;
+
+/** `projects.json`: the file when HERMES_HUB_HOME names the Hub's folder, otherwise the running Hub keeps it. */
+function projectStore(): ProjectStore {
+  return process.env.HERMES_HUB_HOME ? fileProjects() : new HubClient(hubUrl()).projects();
+}
+
+const NO_HUB_FOR_PROJECTS =
+  "hermes-hub skill: the running Hub records projects in its own folder; start it with `hermes-hub start`, or set HERMES_HUB_HOME to the Hub's folder";
 
 class UsageError extends Error {}
 
@@ -54,7 +69,7 @@ async function connect(values: { label?: string; kind?: string; session?: string
   if (skill) console.error(skill);
   const hubCheck = client.hubVersion().then(
     (hub) => {
-      if (hub !== VERSION) console.error(`WARN hermes ${VERSION} != Hub ${hub} · restart hermes hub`);
+      if (hub !== VERSION) console.error(`WARN hermes-hub ${VERSION} != Hub ${hub} · restart the Hub (hermes-hub stop, then hermes-hub start)`);
     },
     () => {}, // an unreachable Hub is reported by the session call itself
   );
@@ -161,7 +176,7 @@ function runMigrate(): number {
     return 0;
   } catch (err) {
     if (!(err instanceof DowngradeError)) throw err;
-    console.error(`hermes migrate: ${err.message}`);
+    console.error(`hermes-hub migrate: ${err.message}`);
     return 1;
   } finally {
     db.close();
@@ -173,7 +188,7 @@ function runConfig(): number {
   try {
     loaded = loadConfigDetailed(configPath());
   } catch (err) {
-    console.error(`hermes config: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`hermes-hub config: ${err instanceof Error ? err.message : String(err)}`);
     return 1;
   }
   const { config, sources } = loaded;
@@ -196,7 +211,7 @@ function runConfig(): number {
 
 function runBackup(args: string[]): number {
   const { positionals } = parseArgs({ args, options: {}, allowPositionals: true, strict: true });
-  if (positionals.length > 1) throw new UsageError("hermes backup takes at most one path argument");
+  if (positionals.length > 1) throw new UsageError("hermes-hub backup takes at most one path argument");
   const dest = positionals[0] ?? manualBackupPath(backupsDir());
   const db = openDb(dbPath());
   try {
@@ -210,12 +225,12 @@ function runBackup(args: string[]): number {
 
 function runRestore(args: string[]): number {
   const { positionals } = parseArgs({ args, options: {}, allowPositionals: true, strict: true });
-  if (positionals.length !== 1) throw new UsageError("hermes restore needs exactly one argument: the backup path");
+  if (positionals.length !== 1) throw new UsageError("hermes-hub restore needs exactly one argument: the backup path");
   const backup = positionals[0]!;
   if (!existsSync(backup)) throw new UsageError(`no such backup: ${backup}`);
   const holder = runningHub(hubLockPath());
   if (holder) {
-    console.error(`hermes restore: a Hub is running at ${holder.url} (pid ${holder.pid}); stop it first`);
+    console.error(`hermes-hub restore: a Hub is running at ${holder.url} (pid ${holder.pid}); stop it first with hermes-hub stop`);
     return 1;
   }
   const aside = restoreBackup(openDb, dbPath(), backup);
@@ -224,8 +239,8 @@ function runRestore(args: string[]): number {
   return 0;
 }
 
-/** `hermes skill install|update` (hub-skill spec, "Distribution: project copies"). */
-function runSkill(args: string[]): number {
+/** `hermes-hub skill install|update` (hub-skill spec, "Distribution: project copies"). */
+async function runSkill(args: string[]): Promise<number> {
   const [sub, ...rest] = args;
   let parsed;
   try {
@@ -235,11 +250,12 @@ function runSkill(args: string[]): number {
   }
   const { values, positionals } = parsed;
   if (sub === "install") {
-    if (positionals.length > 1) throw new UsageError("hermes skill install takes at most one folder");
-    if (values.all && positionals.length !== 1) throw new UsageError("hermes skill install --all needs the folder to search");
+    if (positionals.length > 1) throw new UsageError("hermes-hub skill install takes at most one folder");
+    if (values.all && positionals.length !== 1) throw new UsageError("hermes-hub skill install --all needs the folder to search");
     const dirs = values.all ? findRepos(positionals[0]!) : [positionals[0] ?? process.cwd()];
+    const store = projectStore();
     if (dirs.length === 0) {
-      console.error(`hermes skill install: no git repository under ${positionals[0]}`);
+      console.error(`hermes-hub skill install: no git repository under ${positionals[0]}`);
       return 1;
     }
     let code = 0;
@@ -247,37 +263,42 @@ function runSkill(args: string[]): number {
       const root = gitRoot(dir);
       try {
         if (!root) throw new Error(`${dir} is not in a git repository`);
-        console.log(installSkill(root, values.commit === true));
+        console.log(await installSkill(store, root, values.commit === true));
       } catch (err) {
-        console.error(`hermes skill install: ${err instanceof Error ? err.message : String(err)}`);
+        console.error(`hermes-hub skill install: ${err instanceof Error ? err.message : String(err)}`);
         code = 1;
+        if (err instanceof HubError && err.code === "hub_unavailable") {
+          console.error(NO_HUB_FOR_PROJECTS);
+          break; // every other folder would fail the same way
+        }
       }
     }
     return code;
   }
   if (sub === "update") {
-    if (positionals.length > 0 || values.commit) throw new UsageError("hermes skill update takes only --all");
+    if (positionals.length > 0 || values.commit) throw new UsageError("hermes-hub skill update takes only --all");
     try {
       if (values.all) {
-        const lines = updateAllSkills();
-        console.log(lines.length ? lines.join("\n") : "no recorded hermes-hub skill copies; run hermes skill install");
+        const lines = await updateAllSkills(projectStore());
+        console.log(lines.length ? lines.join("\n") : "no recorded hermes-hub skill copies; run hermes-hub skill install");
         return 0;
       }
       const root = gitRoot(process.cwd());
       if (!root) throw new Error(`${process.cwd()} is not in a git repository`);
-      console.log(updateSkill(root));
+      console.log(await updateSkill(projectStore(), root));
       return 0;
     } catch (err) {
-      console.error(`hermes skill update: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`hermes-hub skill update: ${err instanceof Error ? err.message : String(err)}`);
+      if (err instanceof HubError && err.code === "hub_unavailable") console.error(NO_HUB_FOR_PROJECTS);
       return 1;
     }
   }
-  throw new UsageError(sub ? `unknown skill command ${sub}` : "hermes skill needs install or update");
+  throw new UsageError(sub ? `unknown skill command ${sub}` : "hermes-hub skill needs install or update");
 }
 
 function runSetup(args: string[]): number {
   const { positionals } = parse(args, {}, 1);
-  if (positionals[0] !== "claude") throw new UsageError("hermes setup supports only claude");
+  if (positionals[0] !== "claude") throw new UsageError("hermes-hub setup supports only claude");
   return setupClaude();
 }
 
@@ -289,6 +310,12 @@ async function main(argv: string[]): Promise<number | undefined> {
         return runMigrate();
       case "hub":
         return await runHub();
+      case "start":
+        parse(rest, {}, 0);
+        return await startHub();
+      case "stop":
+        parse(rest, {}, 0);
+        return await stopHub();
       case "config":
         return runConfig();
       case "backup":
@@ -308,10 +335,10 @@ async function main(argv: string[]): Promise<number | undefined> {
       case "mcp":
         return mcp(rest);
       case "skill":
-        return runSkill(rest);
+        return await runSkill(rest);
       case "doctor":
         parse(rest, {}, 0);
-        return await runDoctor(hubUrl());
+        return await runDoctor(hubUrl(), projectStore());
       case "setup":
         return runSetup(rest);
       default:
@@ -319,7 +346,7 @@ async function main(argv: string[]): Promise<number | undefined> {
     }
   } catch (err) {
     if (err instanceof UsageError) {
-      console.error(`hermes: ${err.message}\n${USAGE}`);
+      console.error(`hermes-hub: ${err.message}\n${USAGE}`);
       return 2;
     }
     if (err instanceof HubError) {

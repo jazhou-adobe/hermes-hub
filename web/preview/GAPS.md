@@ -52,4 +52,4 @@ Legend: **Reused** = already specified and used as is. **Composed** = built here
 
 ## Still open after 0b316ce
 
-- **Long config path in `.hh-config-source`.** The read-only config line has `flex-wrap` but no wrap rule for its children, so a long `config.toml` path (one unbroken mono word, e.g. under a temp `HERMES_HOME`) widened Settings to 503 px at a 390 px viewport. Hub glue in `web/src/app.css`: `.hh-config-source > * { min-width: 0; overflow-wrap: anywhere }`. Master should add it to `.hh-config-source`.
+- **Long config path in `.hh-config-source`.** The read-only config line has `flex-wrap` but no wrap rule for its children, so a long `config.toml` path (one unbroken mono word, e.g. under a temp `HERMES_HUB_HOME`) widened Settings to 503 px at a 390 px viewport. Hub glue in `web/src/app.css`: `.hh-config-source > * { min-width: 0; overflow-wrap: anywhere }`. Master should add it to `.hh-config-source`.

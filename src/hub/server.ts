@@ -1,9 +1,10 @@
 import type { BuildArtifact, Server } from "bun";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { HTTP_STATUS, HubError } from "../errors.ts";
 import { hubMcpHandler } from "../mcp/hub.ts";
 import { realTimers, type Timers } from "../mcp/tools.ts";
 import { CLONE_ROOT } from "../paths.ts";
+import { fileProjects, isProjectRecord } from "../cli/skill.ts";
 import type { Answer, Outcome } from "../schema/types.ts";
 import type { Engine, HubEvent, LogFilter } from "./engine.ts";
 import { noopLogger, type Logger } from "./log.ts";
@@ -278,7 +279,29 @@ export async function startServer(
         }),
       },
 
-      // MCP over Streamable HTTP (transports spec); the stdio shim `hermes mcp` is the default door.
+      // projects.json in the Hub's own folder, for `hermes-hub skill` and `doctor` run without HERMES_HUB_HOME (hub-skill spec)
+      "/v1/projects": {
+        GET: handle(async () => Response.json({ projects: await fileProjects().list() })),
+        POST: handle(async (req) => {
+          const body = await jsonBody(req, "invalid_project");
+          if (!isProjectRecord(body) || !isAbsolute(body.root)) {
+            throw new HubError("invalid_project", "expected {root: absolute path, committed: boolean}");
+          }
+          await fileProjects().record({ root: body.root, committed: body.committed });
+          return Response.json({ ok: true });
+        }),
+      },
+      "/v1/projects/forget": {
+        POST: handle(async (req) => {
+          const body = await jsonBody(req, "invalid_project");
+          const root = body && typeof body === "object" && "root" in body ? body.root : undefined;
+          if (typeof root !== "string") throw new HubError("invalid_project", "expected {root}");
+          await fileProjects().forget(root);
+          return Response.json({ ok: true });
+        }),
+      },
+
+      // MCP over Streamable HTTP (transports spec); the stdio shim `hermes-hub mcp` is the default door.
       "/mcp": { POST: mcpRoute, GET: mcpRoute },
 
       // Command Center endpoints (internal; never documented to Agents)

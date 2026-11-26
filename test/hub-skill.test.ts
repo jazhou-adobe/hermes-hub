@@ -3,13 +3,13 @@ import { Database } from "bun:sqlite";
 import type { Server } from "bun";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
-import { refreshUncommittedSkills, SKILL_DIR, skillVersion } from "../src/cli/skill.ts";
+import { dirname, join, relative } from "node:path";
+import { refreshUncommittedSkills, SKILL_COMMAND, SKILL_DIR, skillVersion } from "../src/cli/skill.ts";
 import { migrate } from "../src/db/db.ts";
 import { Engine } from "../src/hub/engine.ts";
 import { startServer } from "../src/hub/server.ts";
 import { INSTRUCTIONS, TOOLS } from "../src/mcp/tools.ts";
-import { SKILL_SOURCE } from "../src/paths.ts";
+import { SKILL_SOURCE, WRAPPER } from "../src/paths.ts";
 import { hubChecks } from "../src/schema/checks.ts";
 import type { Round } from "../src/schema/types.ts";
 import { validateAnswer, validateRound } from "../src/schema/validate.ts";
@@ -64,7 +64,7 @@ interface Box {
 }
 
 /**
- * A temp HOME, HERMES_HOME and PATH (a fake-binaries folder, then the system's own for git): no
+ * A temp HOME, HERMES_HUB_HOME and PATH (a fake-binaries folder, then the system's own for git): no
  * test reads or writes the real user's Hub, Claude, Codex or Cursor config.
  */
 function box(): Box {
@@ -76,7 +76,7 @@ function box(): Box {
   mkdirSync(join(root, "user-home"));
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !AGENT_ENV.test(k)) env[k] = v;
-  Object.assign(env, { HERMES_HOME: home, HOME: join(root, "user-home"), PATH: `${bin}:/usr/bin:/bin` });
+  Object.assign(env, { HERMES_HUB_HOME: home, HOME: join(root, "user-home"), PATH: `${bin}:/usr/bin:/bin` });
   return { root, home, bin, env };
 }
 
@@ -125,7 +125,7 @@ function commandCenterPaths(): RegExp[] {
 }
 
 describe("the Hub Skill's content", () => {
-  test("frontmatter: name is the folder name, metadata.version is the hermes version", () => {
+  test("frontmatter: name is the folder name, metadata.version is the hermes-hub version", () => {
     const text = readFileSync(join(SKILL_SOURCE, "SKILL.md"), "utf8");
     expect(text).toMatch(/^---\nname: hermes-hub\n/);
     expect(text).toMatch(/\ndescription: .+\n/);
@@ -184,7 +184,7 @@ describe("the Hub Skill's content", () => {
   });
 });
 
-describe("hermes skill install / update", () => {
+describe("hermes-hub skill install / update", () => {
   test("install from a subfolder copies to the git root, excludes it once, and records it uncommitted", async () => {
     const b = box();
     const root = repo(b.root, "proj");
@@ -194,7 +194,10 @@ describe("hermes skill install / update", () => {
       expect(res.code).toBe(0);
       expect(res.stdout).toContain(`installed hermes-hub skill ${VERSION} in ${join(root, SKILL_DIR)}`);
     }
-    expect(readFileSync(join(root, SKILL_DIR, "SKILL.md"), "utf8")).toBe(readFileSync(join(SKILL_SOURCE, "SKILL.md"), "utf8"));
+    const rendered = readFileSync(join(SKILL_SOURCE, "SKILL.md"), "utf8").replaceAll(SKILL_COMMAND, WRAPPER);
+    expect(readFileSync(join(root, SKILL_DIR, "SKILL.md"), "utf8")).toBe(rendered);
+    expect(rendered).toContain(`${WRAPPER} ask /tmp/hermes-<topic>/round1.json`); // Agents run the wrapper by path
+    expect(readFileSync(join(root, SKILL_DIR, "references/round-format.md"), "utf8")).not.toContain(SKILL_COMMAND);
     expect(existsSync(join(root, SKILL_DIR, "references/round-format.md"))).toBe(true);
     expect(excludeLines(root).filter((l) => l === `/${SKILL_DIR}/`)).toHaveLength(1);
     expect(status(root)).toBe("");
@@ -238,6 +241,46 @@ describe("hermes skill install / update", () => {
     expect((await run(b, b.root, ["skill", "install", "--all"])).code).toBe(2);
   });
 
+  test("without HERMES_HUB_HOME, install records through the running Hub into its own folder; no Hub, nothing lands", async () => {
+    const b = box();
+    const { HERMES_HUB_HOME: _unset, ...env } = b.env;
+    const hubDir = join(b.root, "hub-folder");
+    mkdirSync(hubDir);
+    const port = freePort();
+    writeFileSync(join(hubDir, "config.toml"), `port = ${port}\n`);
+    const inHub = { cwd: hubDir, env, stdout: "pipe", stderr: "pipe" } as const;
+    expect(await Bun.spawn([process.execPath, MAIN, "migrate"], inHub).exited).toBe(0);
+    const hub = Bun.spawn([process.execPath, MAIN, "hub"], { ...inHub, stderr: "inherit" });
+    try {
+      const reader = hub.stdout.getReader();
+      for (let text = ""; !text.includes(" on http://"); ) {
+        const chunk = await reader.read();
+        if (chunk.done) throw new Error(`the Hub exited: ${text}`);
+        text += new TextDecoder().decode(chunk.value);
+      }
+      const root = repo(b.root, "proj");
+      const env4hub = { ...env, HERMES_HUB_URL: `http://127.0.0.1:${port}` };
+      const ok = Bun.spawn([process.execPath, MAIN, "skill", "install"], { cwd: root, env: env4hub, stdout: "ignore", stderr: "inherit" });
+      expect(await ok.exited).toBe(0);
+      expect(JSON.parse(readFileSync(join(hubDir, "projects.json"), "utf8")).projects).toEqual([{ root, committed: false }]);
+    } finally {
+      hub.kill();
+      await hub.exited;
+    }
+
+    const other = repo(b.root, "other");
+    const proc = Bun.spawn([process.execPath, MAIN, "skill", "install"], {
+      cwd: other,
+      env: { ...env, HERMES_HUB_URL: `http://127.0.0.1:${freePort()}` },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const dead = { code: await proc.exited, stderr: await new Response(proc.stderr).text() };
+    expect(dead.code).toBe(1);
+    expect(dead.stderr).toContain("start it with `hermes-hub start`, or set HERMES_HUB_HOME");
+    expect(existsSync(join(other, SKILL_DIR))).toBe(false);
+  });
+
   test("update replaces the copy wholesale; --all refreshes every record and forgets a removed copy", async () => {
     const b = box();
     const one = repo(b.root, "one");
@@ -261,15 +304,15 @@ describe("hermes skill install / update", () => {
 
     const missing = await run(b, two, ["skill", "update"]);
     expect(missing.code).toBe(1);
-    expect(missing.stderr).toContain("run hermes skill install");
+    expect(missing.stderr).toContain("run hermes-hub skill install");
   });
 
-  test("Hub start refreshes uncommitted copies whose version differs, never committed ones", () => {
+  test("Hub start refreshes uncommitted copies whose version differs, never committed ones", async () => {
     const b = box();
     const loose = repo(b.root, "loose");
     const kept = repo(b.root, "kept");
-    const before = process.env.HERMES_HOME;
-    process.env.HERMES_HOME = b.home;
+    const before = process.env.HERMES_HUB_HOME;
+    process.env.HERMES_HUB_HOME = b.home;
     try {
       const old = "---\nname: hermes-hub\nmetadata:\n  version: 0.0.1\n---\n";
       for (const root of [loose, kept]) {
@@ -280,17 +323,17 @@ describe("hermes skill install / update", () => {
         join(b.home, "projects.json"),
         JSON.stringify({ projects: [{ root: loose, committed: false }, { root: kept, committed: true }] }),
       );
-      expect(refreshUncommittedSkills()).toEqual([`updated hermes-hub skill in ${loose} (0.0.1 → ${VERSION})`]);
+      expect(await refreshUncommittedSkills()).toEqual([`updated hermes-hub skill in ${loose} (0.0.1 → ${VERSION})`]);
       expect(skillVersion(join(loose, SKILL_DIR, "SKILL.md"))).toBe(VERSION);
       expect(readFileSync(join(kept, SKILL_DIR, "SKILL.md"), "utf8")).toBe(old);
-      expect(refreshUncommittedSkills()).toEqual([]); // now current: nothing to do
+      expect(await refreshUncommittedSkills()).toEqual([]); // now current: nothing to do
     } finally {
-      if (before === undefined) delete process.env.HERMES_HOME;
-      else process.env.HERMES_HOME = before;
+      if (before === undefined) delete process.env.HERMES_HUB_HOME;
+      else process.env.HERMES_HUB_HOME = before;
     }
   });
 
-  test("`hermes hub` runs that refresh as it starts", async () => {
+  test("`hermes-hub hub` runs that refresh as it starts", async () => {
     const b = box();
     const port = freePort();
     writeFileSync(join(b.home, "config.toml"), `port = ${port}\n`);
@@ -304,12 +347,12 @@ describe("hermes skill install / update", () => {
       const reader = hub.stdout.getReader();
       const decoder = new TextDecoder();
       let text = "";
-      while (!text.includes("hermes hub: updated")) {
+      while (!text.includes("hermes-hub hub: updated")) {
         const chunk = await reader.read();
         if (chunk.done) throw new Error(`the Hub exited: ${text}`);
         text += decoder.decode(chunk.value, { stream: true });
       }
-      expect(text).toContain(`hermes hub: updated hermes-hub skill in ${root} (0.0.1 → ${VERSION})`);
+      expect(text).toContain(`hermes-hub hub: updated hermes-hub skill in ${root} (0.0.1 → ${VERSION})`);
       expect(skillVersion(join(root, SKILL_DIR, "SKILL.md"))).toBe(VERSION);
     } finally {
       hub.kill();
@@ -319,7 +362,7 @@ describe("hermes skill install / update", () => {
 });
 
 describe("runtime version checks (one stderr line each; the command still succeeds)", () => {
-  test("an older project copy: WARN hermes-hub skill <old> < <new> · run hermes skill update", async () => {
+  test("an older project copy: WARN hermes-hub skill <old> < <new> · run hermes-hub skill update", async () => {
     const b = box();
     const { url } = await up();
     const root = repo(b.root, "proj");
@@ -327,13 +370,13 @@ describe("runtime version checks (one stderr line each; the command still succee
     writeFileSync(join(root, SKILL_DIR, "SKILL.md"), "---\nname: hermes-hub\nmetadata:\n  version: 0.0.9\n---\n");
     const res = await run(b, root, ["inbox"], { env: { HERMES_HUB_URL: url } });
     expect(res.code).toBe(0);
-    expect(res.stderr).toBe(`WARN hermes-hub skill 0.0.9 < ${VERSION} · run hermes skill update\n`);
+    expect(res.stderr).toBe(`WARN hermes-hub skill 0.0.9 < ${VERSION} · run hermes-hub skill update\n`);
 
     writeFileSync(join(root, SKILL_DIR, "SKILL.md"), `---\nname: hermes-hub\nmetadata:\n  version: ${VERSION}\n---\n`);
     expect((await run(b, root, ["inbox"], { env: { HERMES_HUB_URL: url } })).stderr).toBe("");
   });
 
-  test("a Hub on another version: WARN hermes <mine> != Hub <theirs>", async () => {
+  test("a Hub on another version: WARN hermes-hub <mine> != Hub <theirs>", async () => {
     const b = box();
     const fake = Bun.serve({
       hostname: "127.0.0.1",
@@ -347,29 +390,30 @@ describe("runtime version checks (one stderr line each; the command still succee
     try {
       const res = await run(b, b.root, ["inbox"], { env: { HERMES_HUB_URL: `http://127.0.0.1:${fake.port}` } });
       expect(res.code).toBe(0);
-      expect(res.stderr).toBe(`WARN hermes ${VERSION} != Hub 9.9.9 · restart hermes hub\n`);
+      expect(res.stderr).toBe(`WARN hermes-hub ${VERSION} != Hub 9.9.9 · restart the Hub (hermes-hub stop, then hermes-hub start)\n`);
     } finally {
       fake.stop(true);
     }
   });
 });
 
-describe("hermes doctor", () => {
+describe("hermes-hub doctor", () => {
   test("inside Codex's workspace-write sandbox: the Hub is unreachable and the exact network_access snippet is printed", async () => {
     const b = box();
     fakeBinary(b, "codex", "exit 0");
     const res = await run(b, b.root, ["doctor"], {
-      env: { HERMES_HUB_URL: `http://127.0.0.1:${freePort()}`, CODEX_SANDBOX: "seatbelt", CODEX_SANDBOX_NETWORK_DISABLED: "1" },
+      env: { HERMES_HUB_URL: `http://127.0.0.1:${freePort()}`, CODEX_SANDBOX: "seatbelt", CODEX_SANDBOX_NETWORK_DISABLED: "1", HERMES_HUB_APP: b.root },
     });
     expect(res.code).toBe(0);
     expect(res.stdout).toContain("not reachable from this shell");
     expect(res.stdout).toContain("this shell runs in Codex's sandbox with network access off: apply the Codex setting below.");
+    expect(res.stdout).toContain(`WARN HERMES_HUB_APP=${b.root} has no hermes-hub wrapper · export HERMES_HUB_APP=${dirname(WRAPPER)}`);
     expect(res.stdout).toContain(
       [
         "    Sandbox   workspace-write blocks the network. Add to ~/.codex/config.toml:",
         "                [sandbox_workspace_write]",
         "                network_access = true",
-        "              or run hermes outside the sandbox (approve it when Codex asks to escalate).",
+        "              or run hermes-hub outside the sandbox (approve it when Codex asks to escalate).",
       ].join("\n"),
     );
   });
@@ -379,18 +423,20 @@ describe("hermes doctor", () => {
     const { url } = await up();
     const port = new URL(url).port;
     for (const name of ["cursor-agent", "omp"]) fakeBinary(b, name, "exit 0");
-    fakeBinary(b, "claude", 'case "$1 $2" in "mcp get") echo "hermes:"; echo "  Scope: User config (available in all your projects)"; exit 0;; esac; exit 1');
+    fakeBinary(b, "claude", 'case "$1 $2" in "mcp get") echo "hermes-hub:"; echo "  Scope: User config (available in all your projects)"; exit 0;; esac; exit 1');
     const root = repo(b.root, "proj");
     await run(b, root, ["skill", "install"]);
-    const res = await run(b, root, ["doctor"], { env: { HERMES_HUB_URL: url } });
+    const res = await run(b, root, ["doctor"], { env: { HERMES_HUB_URL: url, HERMES_HUB_APP: dirname(WRAPPER) } });
     expect(res.code).toBe(0);
     expect(res.stdout).toContain(`Hub      ${url}: reachable, Hub ${VERSION}`);
     expect(res.stdout).toContain(`Skill    ${join(root, SKILL_DIR)}: ${VERSION}, uncommitted (in .git/info/exclude)`);
     expect(res.stdout).toContain("MCP shim  registered, User config (available in all your projects)");
     expect(res.stdout).toContain(`{ "sandbox": { "network": { "allowedDomains": ["127.0.0.1:${port}"] } } }`);
-    expect(res.stdout).toContain('{ "sandbox": { "excludedCommands": ["hermes *"] } }');
+    expect(res.stdout).toContain(`{ "sandbox": { "excludedCommands": ["${WRAPPER} *"] } }`);
+    expect(res.stdout).toContain(`Shell    hermes-hub: ${WRAPPER} (Agents and MCP clients run it by this path)`);
+    expect(res.stdout).toContain(`HERMES_HUB_APP: ${dirname(WRAPPER)} (this clone's wrapper folder)`);
     expect(res.stdout).toContain('{ "networkPolicy": { "allow": ["127.0.0.1/32"] } }');
-    expect(res.stdout).toContain("none: omp runs hermes with your own network access");
+    expect(res.stdout).toContain("none: omp runs hermes-hub with your own network access");
     expect(res.stdout).not.toContain("Codex (");
   });
 
@@ -399,16 +445,17 @@ describe("hermes doctor", () => {
     fakeBinary(b, "claude", "exit 1");
     const root = repo(b.root, "proj");
     const res = await run(b, root, ["doctor"], { env: { HERMES_HUB_URL: `http://127.0.0.1:${freePort()}` } });
-    expect(res.stdout).toContain("MCP shim  not registered. Run `hermes setup claude`.");
-    expect(res.stdout).toContain(`Skill    not installed in ${root}. Run \`hermes skill install\`.`);
+    expect(res.stdout).toContain("MCP shim  not registered. Run `hermes-hub setup claude`.");
+    expect(res.stdout).toContain(`Skill    not installed in ${root}. Run \`hermes-hub skill install\`.`);
+    expect(res.stdout).toContain(`HERMES_HUB_APP is not set; friendly-grill and scripts find hermes-hub through it: export HERMES_HUB_APP=${dirname(WRAPPER)}`);
   });
 });
 
-describe("hermes setup claude", () => {
+describe("hermes-hub setup claude", () => {
   /** A fake `claude` that logs its arguments; `mcp get` exits $GET_EXIT. */
   function fakeClaude(b: Box): string {
     const log = join(b.root, "claude.log");
-    fakeBinary(b, "claude", `echo "$@" >> "${log}"\ncase "$1 $2" in "mcp get") exit \${GET_EXIT:-1};; "mcp add") echo "Added stdio MCP server hermes"; exit 0;; esac\nexit 1`);
+    fakeBinary(b, "claude", `echo "$@" >> "${log}"\ncase "$1 $2" in "mcp get") exit \${GET_EXIT:-1};; "mcp add") echo "Added stdio MCP server hermes-hub"; exit 0;; esac\nexit 1`);
     return log;
   }
   const calls = (log: string) => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n") : []);
@@ -418,9 +465,9 @@ describe("hermes setup claude", () => {
     const log = fakeClaude(b);
     const res = await run(b, b.root, ["setup", "claude"], { stdin: "y\n" });
     expect(res.code).toBe(0);
-    expect(res.stdout).toContain("This runs: claude mcp add --scope user hermes -- hermes mcp");
-    expect(res.stdout).toContain("Register the hermes MCP shim in Claude Code's user config? [y/N]");
-    expect(calls(log)).toEqual(["mcp get hermes", "mcp add --scope user hermes -- hermes mcp"]);
+    expect(res.stdout).toContain(`This runs: claude mcp add --scope user hermes-hub -- ${WRAPPER} mcp`);
+    expect(res.stdout).toContain("Register the Hermes Hub MCP shim in Claude Code's user config? [y/N]");
+    expect(calls(log)).toEqual(["mcp get hermes-hub", `mcp add --scope user hermes-hub -- ${WRAPPER} mcp`]);
   });
 
   test("anything but yes, or no answer at all, changes nothing", async () => {
@@ -430,7 +477,7 @@ describe("hermes setup claude", () => {
       const res = await run(b, b.root, ["setup", "claude"], { stdin });
       expect(res.code).toBe(1);
       expect(res.stdout).toContain("Not registered; nothing changed.");
-      expect(calls(log)).toEqual(["mcp get hermes"]);
+      expect(calls(log)).toEqual(["mcp get hermes-hub"]);
     }
   });
 
@@ -439,8 +486,8 @@ describe("hermes setup claude", () => {
     const log = fakeClaude(b);
     const res = await run(b, b.root, ["setup", "claude"], { env: { GET_EXIT: "0" }, stdin: "y\n" });
     expect(res.code).toBe(0);
-    expect(res.stdout).toContain("already has an MCP server named hermes");
-    expect(calls(log)).toEqual(["mcp get hermes"]);
+    expect(res.stdout).toContain("already has an MCP server named hermes-hub");
+    expect(calls(log)).toEqual(["mcp get hermes-hub"]);
   });
 
   test("without claude on PATH it says so", async () => {

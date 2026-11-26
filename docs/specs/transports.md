@@ -2,15 +2,15 @@
 
 Status: **confirmed by the Human on 2026-11-20**, ticket [How do the HTTP API, MCP server and file mailbox coexist over one Round lifecycle?](https://github.com/jazhou-adobe/hermes-hub/issues/8). It builds on the [schema](round-schema.md) and the [lifecycle](round-lifecycle.md). Terms follow `GLOSSARY.md`.
 
-**No file mailbox. Local only.** The Human dropped the mailbox, and the [security spec](security.md) binds the Hub to `127.0.0.1` with session tokens used for identity only. Agents whose sandbox blocks localhost are configured once per tool so that `hermes` may reach `127.0.0.1:<port>`; the Hub Skill ships the snippets.
+**No file mailbox. Local only.** The Human dropped the mailbox, and the [security spec](security.md) binds the Hub to `127.0.0.1` with session tokens used for identity only. Agents whose sandbox blocks localhost are configured once per tool so that `hermes-hub` may reach `127.0.0.1:<port>`; the Hub Skill ships the snippets.
 
 ## Shape: one core, HTTP as the reference
 
 ```mermaid
 graph LR
   subgraph Agent side
-    CLI["hermes CLI<br/>ask · wait · cancel · inbox · watch"]
-    SHIM["hermes mcp<br/>(stdio MCP shim)"]
+    CLI["hermes-hub CLI<br/>ask · wait · cancel · inbox · watch"]
+    SHIM["hermes-hub mcp<br/>(stdio MCP shim)"]
   end
   subgraph Hub
     HTTP["HTTP API /v1<br/>(reference)"]
@@ -52,6 +52,7 @@ The **caller** is the Agent session (identity ticket), authenticated by its toke
 | inbox | `GET /v1/inbox?limit=50` | `200` `{answers: [...]}` |
 | events | `GET /v1/events` (SSE; `Last-Event-ID` for catch-up) | `event: round.ended`, `data: <Answer>` |
 | hub info | `GET /v1/hub` | `{hub_id, version, schemas: ["hermes.round/v1"], limits}` |
+| projects (for `hermes-hub skill` and `doctor`, no session) | `GET /v1/projects`; `POST /v1/projects` `{root, committed}`; `POST /v1/projects/forget` `{root}` | `{projects: [...]}`, or `{ok: true}`. The Hub keeps `projects.json` in its data folder ([operations](hub-operations.md)). |
 
 - Wait requests disable Bun's 10 s idle timeout per request (`server.timeout(req, 0)`). SSE sends a comment heartbeat every 15 s.
 - The Command Center has its own Human-scoped stream and endpoints, which are not part of the Agent API.
@@ -72,13 +73,14 @@ Each error has a stable `code`. Over HTTP it is sent as `application/problem+jso
 | `unknown_session` | 401 | Missing or unknown `Hermes-Session` token on an endpoint that needs a session | |
 | `forbidden` | 403 | Host or Origin refused by the browser guard (security spec) | |
 | `advisor_cannot_ask` | 403 | A session or Round requested from an Advisor run (`HERMES_ADVISOR` set; [delegation spec](delegation.md)) | |
-| `hub_unavailable` | — | Client side only: the Hub can't be reached (it is down, or a sandbox blocks the connection). The message points to the Hub Skill's sandbox setup: `hermes doctor`. | |
+| `invalid_project` | 422 | A `/v1/projects` body is not `{root: absolute path, committed: boolean}` (or `{root}` to forget) | |
+| `hub_unavailable` | — | Client side only: the Hub can't be reached (it is down, or a sandbox blocks the connection). The message asks for `hermes-hub start` and points to the Hub Skill's sandbox setup: `hermes-hub doctor`. | |
 
 ## MCP
 
 Two hosts, one tool set:
 
-- **`hermes mcp`**, a stdio shim that proxies to HTTP. This is the default. It has no first-byte timer, it inherits the Agent's environment for identity detection, and, like the CLI, it calls `POST /v1/sessions` for the detected identity (on every tool call, since it re-detects per call; [agent-identity.md](agent-identity.md)), keeping the token in memory.
+- **`hermes-hub mcp`**, a stdio shim that proxies to HTTP. This is the default. It has no first-byte timer, it inherits the Agent's environment for identity detection, and, like the CLI, it calls `POST /v1/sessions` for the detected identity (on every tool call, since it re-detects per call; [agent-identity.md](agent-identity.md)), keeping the token in memory.
 - **`/mcp`** on the Hub, Streamable HTTP on revision 2026-07-28, legacy-stateless for 2025-era clients (2025-11-25 and the earlier 2025 revisions, such as the 2025-06-18 that Codex 0.133 sends), loopback only. It serves clients that prefer a URL. Identity comes from `clientInfo` and per-call `_meta`, and the session token from `POST /v1/sessions`.
 
 | Tool | Input | Behaviour |
@@ -99,17 +101,21 @@ Two hosts, one tool set:
   - `hermes_wait` and `hermes_cancel` without a `round_id` fail with `not_found`; `hermes_ask` without a `round` object fails with `invalid_round`.
   - The text content of each result repeats the structured one (`ERROR <code> <message>` for errors, as on the CLI).
 
-## CLI (`hermes`)
+## CLI (`hermes-hub`)
+
+Run through the wrapper `<clone>/bin/hermes-hub` by its path ([operations](hub-operations.md)).
 
 | Command | Does |
 |---|---|
-| `hermes ask <file\|-> [--wait\|--no-wait] [--out <file>] [--supersedes <id>]` | submit, then wait in a loop of 25 s long-polls unless `--no-wait` |
-| `hermes wait <id> [--out <file>]` | wait in a loop until the Round ends |
-| `hermes cancel <id>` | cancel |
-| `hermes inbox [--format lines\|json]` | inbox |
-| `hermes watch` | events; one `ANSWER` line per ended Round, for Monitor and notify-style tools |
-| `hermes mcp` | the stdio MCP shim |
-| `hermes hub` | starts the Hub (manual start) |
+| `hermes-hub ask <file\|-> [--wait\|--no-wait] [--out <file>] [--supersedes <id>]` | submit, then wait in a loop of 25 s long-polls unless `--no-wait` |
+| `hermes-hub wait <id> [--out <file>]` | wait in a loop until the Round ends |
+| `hermes-hub cancel <id>` | cancel |
+| `hermes-hub inbox [--format lines\|json]` | inbox |
+| `hermes-hub watch` | events; one `ANSWER` line per ended Round, for Monitor and notify-style tools |
+| `hermes-hub mcp` | the stdio MCP shim |
+| `hermes-hub start` | starts the Hub detached in the data folder; output in `logs/hub.out`; exits 1 if it exits early or a Hub already runs there |
+| `hermes-hub stop` | stops the Hub holding the data folder's `hub.lock` (SIGTERM, waits 15 s); exits 1 if none runs |
+| `hermes-hub hub` | runs the Hub in the foreground (Ctrl-C) |
 
 **Output (line markers):**
 
@@ -130,12 +136,12 @@ ANSWER {"schema":"hermes.answer/v1","round_id":"r_01jd3k8w2m","outcome":"answere
 |---|---|
 | `2` | Usage error |
 | `3` | `hub_unavailable` |
-| `4` | Rejected: `invalid_round`, `too_large`, `unsupported_schema`, `idempotency_conflict`, `round_ended`, `flood_cap`, `not_found`, `advisor_cannot_ask` |
+| `4` | Rejected: `invalid_round`, `too_large`, `unsupported_schema`, `idempotency_conflict`, `round_ended`, `flood_cap`, `not_found`, `advisor_cannot_ask`, `invalid_project` |
 | `5` | `unknown_session` or `forbidden` |
 
 ## Left to other tickets
 
 - **Security:** settled in [security.md](security.md): local only, a session token as the `Hermes-Session` header, and the browser guard.
-- **Agent identity:** settled in [agent-identity.md](agent-identity.md): detection, `POST /v1/sessions` on every CLI run, and discovery via `HERMES_HUB_URL` → `<hermes's own clone>/.hermes/hub.json` → `http://127.0.0.1:4747` ([operations](hub-operations.md)).
-- **Hub Skill:** settled in [hub-skill.md](hub-skill.md): CLI by default, MCP Tasks on Claude Code (taught through the MCP tool descriptions), and `hermes doctor` for the sandbox snippets.
-- **Claude Code hooks adapter:** dropped. Agents run `hermes inbox` after resuming ([hub-skill.md](hub-skill.md)).
+- **Agent identity:** settled in [agent-identity.md](agent-identity.md): detection, `POST /v1/sessions` on every CLI run, and discovery via `HERMES_HUB_URL` → `$HERMES_HUB_HOME/hub.json` (when set) → `http://127.0.0.1:4747` ([operations](hub-operations.md)).
+- **Hub Skill:** settled in [hub-skill.md](hub-skill.md): CLI by default, MCP Tasks on Claude Code (taught through the MCP tool descriptions), and `hermes-hub doctor` for the sandbox snippets.
+- **Claude Code hooks adapter:** dropped. Agents run `hermes-hub inbox` after resuming ([hub-skill.md](hub-skill.md)).

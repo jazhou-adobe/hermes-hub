@@ -399,8 +399,12 @@ export function Settings() {
               </div>
             ) : null}
             <p className="hh-body-sm hh-measure">
-              {storage ? `${storage.rounds} Rounds stored. ` : ""}Rounds, Answers, Attachments, Drafts and Advisor runs are kept forever in this phase. The
-              database is <span className="hh-mono-sm">.hermes/hub.db</span>.
+              {storage ? `${storage.rounds} Rounds stored. ` : ""}Rounds, Answers, Attachments, Drafts and Advisor runs are kept forever in this phase.
+              {storage?.db_path ? (
+                <>
+                  {" "}The database is <span className="hh-mono-sm">{storage.db_path}</span>.
+                </>
+              ) : null}
             </p>
           </section>
         </div>

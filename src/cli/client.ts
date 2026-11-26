@@ -1,6 +1,7 @@
 import { HubError } from "../errors.ts";
 import type { Answer, PendingStatus } from "../schema/types.ts";
 import { validateAnswer, type SessionRequest } from "../schema/validate.ts";
+import { isProjectRecord, type ProjectStore } from "./skill.ts";
 
 const WAIT_SECONDS = 25;
 const UNREACHABLE_LIMIT_MS = 5 * 60_000;
@@ -9,11 +10,11 @@ export function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-/** `hub_unavailable` (transports spec): the message sends the Agent to the Skill's sandbox advice, `hermes doctor`. */
+/** `hub_unavailable` (transports spec): the message sends the Agent to the Skill's sandbox advice, `hermes-hub doctor`. */
 function hubUnavailable(baseUrl: string): HubError {
   return new HubError(
     "hub_unavailable",
-    `cannot reach the Hub at ${baseUrl}. Ask the Human to start it with \`hermes hub\`; from a sandbox, ask them to run \`hermes doctor\` for the setting that lets hermes reach it`,
+    `cannot reach the Hub at ${baseUrl}. Ask the Human to start it with \`hermes-hub start\`; from a sandbox, ask them to run \`hermes-hub doctor\` for the setting that lets hermes-hub reach it`,
   );
 }
 
@@ -102,6 +103,23 @@ export class HubClient {
     const res = await this.request("GET", `/v1/inbox?limit=${limit}`);
     if (!Array.isArray(res.answers)) throw new HubError("internal", "inbox response without answers");
     return res.answers.map(asAnswer);
+  }
+
+  /** `projects.json` kept by the running Hub in its own folder (`/v1/projects`), for `hermes-hub skill` and `doctor`. */
+  projects(): ProjectStore {
+    return {
+      list: async () => {
+        const res = await this.request("GET", "/v1/projects");
+        if (!Array.isArray(res.projects)) throw new HubError("internal", "projects response without projects");
+        return res.projects.filter(isProjectRecord);
+      },
+      record: async (project) => {
+        await this.request("POST", "/v1/projects", project);
+      },
+      forget: async (root) => {
+        await this.request("POST", "/v1/projects/forget", { root });
+      },
+    };
   }
 
   /** get, or wait when `waitSeconds` is given (1–55 s, the Hub's window): pending status or the Answer. */

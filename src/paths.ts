@@ -1,20 +1,30 @@
 import { join, resolve } from "node:path";
 
-/** The clone `hermes` runs from (`bun link` points at it). */
+/** The clone `hermes-hub` runs from: the Command Center source and the shipped Skill live here, never data. */
 export const CLONE_ROOT = resolve(import.meta.dir, "..");
+/**
+ * The folder holding the CLI wrapper, the only supported way to run Hermes Hub. Callers outside
+ * this repo (friendly-grill, scripts) find it through `HERMES_HUB_APP`; Agents and MCP clients get
+ * the wrapper's absolute path written into their Skill copy or registration.
+ */
+export const APP_DIR = join(CLONE_ROOT, "bin");
+export const WRAPPER = join(APP_DIR, "hermes-hub");
+export const CLI_MAIN = join(CLONE_ROOT, "src", "cli", "main.ts");
 
-/** `<clone>/.hermes/`, or `HERMES_HOME` when set. */
-export function hermesHome(): string {
-  const override = process.env.HERMES_HOME;
-  return override ? resolve(override) : join(CLONE_ROOT, ".hermes");
+/** The folder this process was started in, captured before the development server may chdir. */
+const LAUNCH_DIR = process.cwd();
+
+/** The Hub's data folder: `HERMES_HUB_HOME` (relative to the launch folder), or the launch folder itself. */
+export function hubHome(): string {
+  return resolve(LAUNCH_DIR, process.env.HERMES_HUB_HOME ?? "");
 }
 
-export const dbPath = () => join(hermesHome(), "hub.db");
-export const hubJsonPath = () => join(hermesHome(), "hub.json");
-export const hubLockPath = () => join(hermesHome(), "hub.lock");
-export const configPath = () => join(hermesHome(), "config.toml");
-export const logPath = () => join(hermesHome(), "logs", "hub.log");
-export const backupsDir = () => join(hermesHome(), "backups");
-export const projectsPath = () => join(hermesHome(), "projects.json");
+export const dbPath = () => join(hubHome(), "hub.db");
+export const hubJsonPath = () => join(hubHome(), "hub.json");
+export const hubLockPath = () => join(hubHome(), "hub.lock");
+export const configPath = () => join(hubHome(), "config.toml");
+export const logPath = () => join(hubHome(), "logs", "hub.log");
+export const backupsDir = () => join(hubHome(), "backups");
+export const projectsPath = () => join(hubHome(), "projects.json");
 /** The Hub Skill as shipped in this clone (hub-skill spec, Packaging). */
 export const SKILL_SOURCE = join(CLONE_ROOT, "skill", "hermes-hub");

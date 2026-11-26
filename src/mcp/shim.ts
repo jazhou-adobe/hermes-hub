@@ -5,7 +5,7 @@ import { detectSession, type IdentityFlags } from "../cli/identity.ts";
 import { createMcpFactory, HUB_WAIT_SECONDS, realTimers, type Timers } from "./tools.ts";
 
 /**
- * The `hermes mcp` tool set: every call re-detects the caller (flags, the call's `_meta`,
+ * The `hermes-hub mcp` tool set: every call re-detects the caller (flags, the call's `_meta`,
  * `clientInfo`, the inherited environment) and calls `POST /v1/sessions`, as each CLI run does; the
  * token stays in memory. Then it proxies to the HTTP API.
  */
@@ -33,5 +33,5 @@ export function shimFactory(baseUrl: string, flags: IdentityFlags, timers: Timer
 
 /** Serves the shim on stdin/stdout until the client closes stdin. Nothing else may write to stdout. */
 export function serveShim(baseUrl: string, flags: IdentityFlags): void {
-  serveStdio(shimFactory(baseUrl, flags), { onerror: (err) => console.error(`hermes mcp: ${err.message}`) });
+  serveStdio(shimFactory(baseUrl, flags), { onerror: (err) => console.error(`hermes-hub mcp: ${err.message}`) });
 }

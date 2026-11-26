@@ -80,7 +80,9 @@ describe("backup", () => {
 
   test("restoreBackup: round-trips the database, keeping a copy of the pre-restore one aside", () => {
     const dir = tmpDir();
+    const previousHome = process.env.HERMES_HUB_HOME;
     try {
+      process.env.HERMES_HUB_HOME = dir; // migrate() backs up into the data folder: keep it in the temp dir
       const dbPath = join(dir, "hub.db");
       let db = openDb(dbPath);
       migrate(db);
@@ -103,6 +105,8 @@ describe("backup", () => {
       expect(asideIds).toEqual(["s_one", "s_two"]); // the pre-restore state is preserved
       asideDb.close();
     } finally {
+      if (previousHome === undefined) delete process.env.HERMES_HUB_HOME;
+      else process.env.HERMES_HUB_HOME = previousHome;
       rmSync(dir, { recursive: true, force: true });
     }
   });
@@ -110,9 +114,9 @@ describe("backup", () => {
   test("migrate() takes a backup before applying, for a real (non-in-memory) database only", () => {
     const dir = tmpDir();
     const home = mkdtempSync(join(tmpdir(), "hermes-home-test-"));
-    const previousHome = process.env.HERMES_HOME;
+    const previousHome = process.env.HERMES_HUB_HOME;
     try {
-      process.env.HERMES_HOME = home;
+      process.env.HERMES_HUB_HOME = home;
       const dbPath = join(dir, "hub.db");
       const db = openDb(dbPath);
       migrate(db);
@@ -128,8 +132,8 @@ describe("backup", () => {
       const filesAfter = existsSync(backups) ? readdirSync(backups) : [];
       expect(filesAfter.length).toBe(files.length);
     } finally {
-      if (previousHome === undefined) delete process.env.HERMES_HOME;
-      else process.env.HERMES_HOME = previousHome;
+      if (previousHome === undefined) delete process.env.HERMES_HUB_HOME;
+      else process.env.HERMES_HUB_HOME = previousHome;
       rmSync(dir, { recursive: true, force: true });
       rmSync(home, { recursive: true, force: true });
     }
