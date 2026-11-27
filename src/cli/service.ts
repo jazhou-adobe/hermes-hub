@@ -85,3 +85,15 @@ export async function stopHub(): Promise<number> {
   console.error(`hermes-hub stop: pid ${holder.pid} is still running ${STOP_TIMEOUT_MS / 1000} s after SIGTERM`);
   return 1;
 }
+
+/**
+ * `hermes-hub restart`: stops the Hub running on this data folder, if any, then starts it again, so it picks up new code
+ * and rebuilds the Command Center. Stops short if the old Hub does not exit.
+ */
+export async function restartHub(): Promise<number> {
+  if (runningHub(hubLockPath())) {
+    const stopped = await stopHub();
+    if (stopped !== 0) return stopped;
+  }
+  return startHub();
+}

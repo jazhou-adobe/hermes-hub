@@ -37,7 +37,7 @@ tail -f "$HERMES_HUB_HOME/logs/hub.out"   # the background Hub's output
 
 Agents and MCP clients don't need either variable to find the command: they get the wrapper's absolute path from their Skill copy or MCP registration.
 
-`hermes-hub start` runs the Hub detached in the data folder, waits until it is serving (`hub.json` written) and prints `Hermes Hub on <url> (pid N); data in <folder>; output in <folder>/logs/hub.out`. It exits 1 with the Hub's output if the Hub exits early (for example `migrations are pending; run hermes-hub migrate`), or if a Hub already runs on that folder. `hermes-hub stop` sends SIGTERM to the Hub holding this folder's `hub.lock`, waits up to 15 s for it to exit, and exits 1 if none is running.
+`hermes-hub start` runs the Hub detached in the data folder, waits until it is serving (`hub.json` written) and prints `Hermes Hub on <url> (pid N); data in <folder>; output in <folder>/logs/hub.out`. It exits 1 with the Hub's output if the Hub exits early (for example `migrations are pending; run hermes-hub migrate`), or if a Hub already runs on that folder. `hermes-hub stop` sends SIGTERM to the Hub holding this folder's `hub.lock`, waits up to 15 s for it to exit, and exits 1 if none is running. `hermes-hub restart` stops the Hub if one runs, then starts it again.
 
 Upgrading: `hermes-hub stop`, `git pull`, `bun install`, `hermes-hub migrate`, `hermes-hub start`.
 
@@ -59,7 +59,7 @@ The Command Center lives at the Hub's URL: the Feed (`/`), Round detail (`/round
 
 ### The macOS app (optional)
 
-`Hermes Hub.app` is a native window around the Command Center ([spec](docs/specs/macos-app.md)). It doesn't start or stop the Hub: keep using `hermes-hub start`/`stop`. Build it with the Xcode command line tools, then drag it to `/Applications` if you like:
+`Hermes Hub.app` is a native window around the Command Center ([spec](docs/specs/macos-app.md)). It doesn't start or stop the Hub: keep using `hermes-hub start`/`stop`/`restart`. Build it with the Xcode command line tools, then drag it to `/Applications` if you like:
 
 ```bash
 macos/build.sh                        # → macos/build/Hermes Hub.app

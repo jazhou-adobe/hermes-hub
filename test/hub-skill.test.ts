@@ -390,7 +390,7 @@ describe("runtime version checks (one stderr line each; the command still succee
     try {
       const res = await run(b, b.root, ["inbox"], { env: { HERMES_HUB_URL: `http://127.0.0.1:${fake.port}` } });
       expect(res.code).toBe(0);
-      expect(res.stderr).toBe(`WARN hermes-hub ${VERSION} != Hub 9.9.9 · restart the Hub (hermes-hub stop, then hermes-hub start)\n`);
+      expect(res.stderr).toBe(`WARN hermes-hub ${VERSION} != Hub 9.9.9 · restart the Hub (hermes-hub restart)\n`);
     } finally {
       fake.stop(true);
     }

@@ -232,7 +232,7 @@ describe("hub operations: the data folder", () => {
     await stopHubCleanly(hub);
   });
 
-  test("bin/hermes-hub start runs the Hub detached in the current folder; stop ends it; both refuse the wrong state", async () => {
+  test("bin/hermes-hub start runs the Hub detached in the current folder; restart replaces it; stop ends it; start and stop refuse the wrong state", async () => {
     const box = sandbox();
     const { HERMES_HUB_HOME: _unset, ...env } = box.env;
     const wrapper = async (cmd: string) => {
@@ -259,11 +259,24 @@ describe("hub operations: the data folder", () => {
     expect((await fetch(`${box.url}/v1/hub`)).status).toBe(200);
     expect((await wrapper("start")).stderr).toContain(`already running at ${box.url} (pid ${pid})`);
 
+    const restarted = await wrapper("restart");
+    expect(restarted.code).toBe(0);
+    expect(restarted.stdout).toContain(`stopped Hermes Hub at ${box.url} (pid ${pid})`);
+    const newPid = Number(/Hermes Hub on .* \(pid (\d+)\)/.exec(restarted.stdout)?.[1]);
+    expect(newPid).not.toBe(pid);
+    expect(pidAlive(pid)).toBe(false);
+    expect((await fetch(`${box.url}/v1/hub`)).status).toBe(200);
+
     const stopped = await wrapper("stop");
     expect(stopped.code).toBe(0);
-    expect(stopped.stdout).toContain(`stopped Hermes Hub at ${box.url} (pid ${pid})`);
-    expect(pidAlive(pid)).toBe(false);
+    expect(stopped.stdout).toContain(`stopped Hermes Hub at ${box.url} (pid ${newPid})`);
+    expect(pidAlive(newPid)).toBe(false);
     expect(existsSync(join(box.home, "hub.lock"))).toBe(false);
     expect((await wrapper("stop")).code).toBe(1);
+    // With no Hub running, restart just starts one.
+    const fresh = await wrapper("restart");
+    expect(fresh.code).toBe(0);
+    expect(fresh.stdout).not.toContain("stopped");
+    expect(fresh.stdout).toContain(`Hermes Hub on ${box.url}`);
   });
 });

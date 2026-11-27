@@ -15,7 +15,7 @@ import { HubClient } from "./client.ts";
 import { hubUrl } from "./discovery.ts";
 import { runDoctor } from "./doctor.ts";
 import { detectSession } from "./identity.ts";
-import { startHub, stopHub } from "./service.ts";
+import { restartHub, startHub, stopHub } from "./service.ts";
 import { setupClaude } from "./setup.ts";
 import { fileProjects, findRepos, gitRoot, installSkill, staleSkillWarning, updateAllSkills, updateSkill, type ProjectStore } from "./skill.ts";
 
@@ -23,6 +23,7 @@ const USAGE = `usage: bin/hermes-hub <command>   (run it by path; nothing is ins
   hermes-hub migrate                 create or upgrade the database
   hermes-hub start                   start the Hub in the background (output in logs/hub.out)
   hermes-hub stop                    stop the Hub running on this data folder
+  hermes-hub restart                 stop the Hub on this data folder if it runs, then start it again
   hermes-hub hub                     run the Hub in the foreground (Ctrl-C stops it)
   hermes-hub config                  print the effective settings and their source
   hermes-hub backup [path]           take a backup now (default: backups/hub-manual-<timestamp>.db in the Hub's folder)
@@ -69,7 +70,7 @@ async function connect(values: { label?: string; kind?: string; session?: string
   if (skill) console.error(skill);
   const hubCheck = client.hubVersion().then(
     (hub) => {
-      if (hub !== VERSION) console.error(`WARN hermes-hub ${VERSION} != Hub ${hub} · restart the Hub (hermes-hub stop, then hermes-hub start)`);
+      if (hub !== VERSION) console.error(`WARN hermes-hub ${VERSION} != Hub ${hub} · restart the Hub (hermes-hub restart)`);
     },
     () => {}, // an unreachable Hub is reported by the session call itself
   );
@@ -316,6 +317,9 @@ async function main(argv: string[]): Promise<number | undefined> {
       case "stop":
         parse(rest, {}, 0);
         return await stopHub();
+      case "restart":
+        parse(rest, {}, 0);
+        return await restartHub();
       case "config":
         return runConfig();
       case "backup":

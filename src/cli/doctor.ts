@@ -83,7 +83,7 @@ async function hubLine(url: string, env: Record<string, string | undefined>): Pr
     const info: unknown = await res.json();
     const version = isRecord(info) && typeof info.version === "string" ? info.version : "unknown";
     lines.push(`${url}: reachable, Hub ${version}`);
-    if (version !== VERSION) lines.push(`WARN hermes-hub ${VERSION} != Hub ${version} · restart the Hub (hermes-hub stop, then hermes-hub start)`);
+    if (version !== VERSION) lines.push(`WARN hermes-hub ${VERSION} != Hub ${version} · restart the Hub (hermes-hub restart)`);
   } catch (err) {
     const reason = err instanceof Error && err.name === "TimeoutError" ? "timed out" : "cannot connect";
     lines.push(`${url}: not reachable from this shell (${reason}). Start it with \`hermes-hub start\`.`);

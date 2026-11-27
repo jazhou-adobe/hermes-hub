@@ -252,7 +252,7 @@ Every value is `set_by: "human"`. `suggested_by` appears only where the Human se
 
 ## Running the Hub
 
-The only entry point is the wrapper `bin/hermes-hub` in the clone (`exec bun <clone>/src/cli/main.ts "$@"`), run by its path; there is no global install. `hermes-hub hub` runs the Hub in the foreground; `hermes-hub start` runs the same Hub detached in the data folder, waits until `hub.json` is written, and sends its output to `logs/hub.out` (exit 1 with that output if the Hub exits early, or if a Hub already runs there). `hermes-hub stop` sends SIGTERM to the Hub holding `hub.lock` and waits up to 15 s.
+The only entry point is the wrapper `bin/hermes-hub` in the clone (`exec bun <clone>/src/cli/main.ts "$@"`), run by its path; there is no global install. `hermes-hub hub` runs the Hub in the foreground; `hermes-hub start` runs the same Hub detached in the data folder, waits until `hub.json` is written, and sends its output to `logs/hub.out` (exit 1 with that output if the Hub exits early, or if a Hub already runs there). `hermes-hub stop` sends SIGTERM to the Hub holding `hub.lock` and waits up to 15 s. `hermes-hub restart` is `stop` (when a Hub runs) then `start`.
 
 The Hub (`src/hub/run.ts`):
 

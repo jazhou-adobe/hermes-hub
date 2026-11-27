@@ -13,12 +13,14 @@ cd <data folder>
 <clone>/bin/hermes-hub migrate   # creates the database
 <clone>/bin/hermes-hub start     # starts the Hub in the background
 <clone>/bin/hermes-hub stop      # stops it
+<clone>/bin/hermes-hub restart   # stops it if it runs, then starts it again
 <clone>/bin/hermes-hub hub       # or: the Hub in the foreground (Ctrl-C), for a terminal or launchd
 ```
 
 - **One entry point:** the wrapper `bin/hermes-hub` (`exec bun <clone>/src/cli/main.ts "$@"`), run by its path. There is no `bin` entry in `package.json` and no global install. Below, `hermes-hub <cmd>` means that wrapper.
 - **`hermes-hub start`** runs the Hub detached in the data folder, waits until it is serving (`hub.json` written) and prints `Hermes Hub on <url> (pid N); data in <folder>; output in <folder>/logs/hub.out`. It exits 1 with the Hub's output if the Hub exits early (for example `migrations are pending; run hermes-hub migrate`), or if a Hub already runs on that folder.
 - **`hermes-hub stop`** sends SIGTERM to the Hub holding this data folder's `hub.lock`, waits up to 15 s for it to exit, and exits 1 if none is running.
+- **`hermes-hub restart`** runs `stop` when a Hub holds this data folder's `hub.lock`, then `start`, with the same messages. It exits 1 if the old Hub does not exit or the new one fails to start; with no Hub running it just starts one. Use it after pulling code that needs no migration, or to rebuild the Command Center.
 - **Upgrading:** `hermes-hub stop`, `git pull`, `bun install`, `hermes-hub migrate`, `hermes-hub start`.
 - **No packaging:** there is no compiled binary, Homebrew tap or published package in Phase 1.
 - **The Command Center** is served from source by Bun's HTML import. Bun builds it on the fly, with hot reload when `NODE_ENV` is development. Nothing is embedded.

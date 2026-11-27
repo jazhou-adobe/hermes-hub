@@ -115,6 +115,7 @@ Run through the wrapper `<clone>/bin/hermes-hub` by its path ([operations](hub-o
 | `hermes-hub mcp` | the stdio MCP shim |
 | `hermes-hub start` | starts the Hub detached in the data folder; output in `logs/hub.out`; exits 1 if it exits early or a Hub already runs there |
 | `hermes-hub stop` | stops the Hub holding the data folder's `hub.lock` (SIGTERM, waits 15 s); exits 1 if none runs |
+| `hermes-hub restart` | `stop` if a Hub holds the data folder's `hub.lock`, then `start`; exits 1 if either step fails |
 | `hermes-hub hub` | runs the Hub in the foreground (Ctrl-C) |
 
 **Output (line markers):**
