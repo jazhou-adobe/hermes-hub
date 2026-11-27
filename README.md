@@ -57,6 +57,17 @@ hermes-hub watch                                                      # one ANSW
 
 The Command Center lives at the Hub's URL: the Feed (`/`), Round detail (`/rounds/<id>`), the answered log (`/log`), Agents with Lanes (`/agents`) and Settings (`/settings`). Press `?` there for the key map.
 
+### The macOS app (optional)
+
+`Hermes Hub.app` is a native window around the Command Center ([spec](docs/specs/macos-app.md)). It doesn't start or stop the Hub: keep using `hermes-hub start`/`stop`. Build it with the Xcode command line tools, then drag it to `/Applications` if you like:
+
+```bash
+macos/build.sh                        # → macos/build/Hermes Hub.app
+open "macos/build/Hermes Hub.app"
+```
+
+**Hermes Hub → Hub URL… (⌘,)** sets the address (default `http://127.0.0.1:4747/`). Links to other sites open in your browser; **View → Open in Browser (⇧⌘O)** opens the current page there.
+
 ## Teach your Agents: the Hub Skill, doctor and setup
 
 Agents learn Hermes from the **Hub Skill** ([`skill/hermes-hub/`](skill/hermes-hub/SKILL.md)), copied into each project. Codex, Cursor, VS Code Copilot and omp read it from `.agents/skills/`. Claude Code does not: it learns Hermes from the MCP tool descriptions, once `hermes-hub setup claude` has registered the shim. The installed copy names the wrapper by its absolute path (`hermes-hub skill install` fills it in), so Agents never need `hermes-hub` on PATH; if the clone moves, run `hermes-hub skill update --all`.

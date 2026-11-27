@@ -1,3 +1,4 @@
 .omp/config.yml
 node_modules/
 hermes-data/
+macos/build/
