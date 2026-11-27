@@ -3,10 +3,10 @@ import type { FeedRoundView } from "../../../src/hub/engine.ts";
 import type { Answer } from "../../../src/schema/types.ts";
 import { countdown, hhmm, LOCK_SOON_MS, nextDeadline, OUTCOME_WORDS, plural, projectLabel } from "../format.ts";
 import { Icon } from "../icons.tsx";
-import { linkClick } from "../router.ts";
 import { clearJump, reconnectNow, useNow, useStore } from "../store.ts";
 import { isTextField, KeyList } from "../keys.tsx";
 import { Callsign, EndedRound, PendingRound, type RoundHandle } from "./Round.tsx";
+import { Standby } from "./Standby.tsx";
 
 interface Filters {
   callsigns: Set<string>;
@@ -284,15 +284,7 @@ export function Feed() {
           <span className="hh-skeleton" data-shape="strip"></span>
         </div>
       ) : rounds.length === 0 ? (
-        <div className="hh-strip-bay-empty">
-          <div className="hh-empty-state">
-            <p className="hh-heading-md">No pending Rounds.</p>
-            <p className="hh-body-sm">Agents ask through the Hub Skill.</p>
-            <a className="hh-link" href="/log" onClick={linkClick("/log")}>
-              Open answered log
-            </a>
-          </div>
-        </div>
+        <Standby compact={false} />
       ) : (
         <div className="hh-feed">
           <aside className="hh-feed-index hh-panel" data-density="compact" aria-labelledby="index-h">
@@ -345,6 +337,7 @@ export function Feed() {
             {shortcuts ? <KeyList /> : null}
           </aside>
           <div className="hh-feed-column">
+            {pendingCount === 0 ? <Standby compact={true} /> : null}
             <ol className="hh-feed-list" aria-label="Rounds in the Feed" ref={listRef}>
               {shown.map((r) =>
                 r.status === "pending" ? (

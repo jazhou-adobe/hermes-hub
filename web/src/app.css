@@ -27,3 +27,723 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* Hub addition (web/preview/GAPS.md, "Hub additions"): the side nav hides from the app-bar toggle or `[`. Hidden, the
+   page takes the full width; called back, the nav slides in from the start edge. */
+@media (min-width: 64rem) {
+  .hh-app-shell[data-nav='hidden'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.hh-app-shell[data-nav='shown'] > .hh-app-shell-nav {
+  animation: hh-nav-in var(--hh-motion-panel) var(--hh-easing-enter);
+}
+@keyframes hh-nav-in {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--hh-enter-offset) * -2));
+  }
+}
+
+/* ==================== Hub addition: Standby, the Feed with nothing pending (web/src/feed/Standby.tsx) ====================
+ * A deep-space tracking scope: phosphor chart, a ringed planet, the session's Agents as craft on three orbits in their
+ * agent colours, a sweep beam, a rare meteor; the quiet timer and Agent count as live readouts; loop chatter typed out
+ * on a teletype strip. Full: a cinematic backdrop behind the whole shell (open sky in three drifting depths, letterbox
+ * bars, HUD brackets, a focus-pull opening and a slow camera drift) with a title card. Compact: a console strip above
+ * Rounds that ended in place. The well and phosphor fall back to the code plane and the live colour outside the Flight
+ * Director world. Reduced motion stills it all. */
+.hh-standby {
+  --standby-well: var(--flight-director-well, var(--hh-code));
+  --standby-ink: var(--flight-director-phosphor, var(--hh-live));
+  --standby-star: color-mix(in srgb, var(--standby-ink) 30%, var(--hh-strip));
+  --standby-sweep: 6s;
+}
+.hh-standby[data-size='compact'] {
+  --standby-scope: 8.5rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--hh-space-4);
+  padding: var(--hh-space-3);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-md);
+  background: var(--hh-surface-shelf);
+  color: var(--hh-surface-shelf-foreground);
+}
+@media (max-width: 30rem) {
+  .hh-standby[data-size='compact'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The console module: a riveted tray plate holding the round well. */
+.hh-standby-scope {
+  position: relative;
+  box-sizing: border-box;
+  width: var(--standby-scope);
+  padding: var(--hh-space-4);
+  border: var(--hh-border-width-thin) solid var(--hh-border);
+  border-radius: var(--hh-radius-md);
+  background-color: var(--hh-surface-tray);
+  background-image:
+    radial-gradient(circle at 0.4375rem 0.4375rem, var(--hh-border) 0.125rem, transparent 0.1875rem),
+    radial-gradient(circle at calc(100% - 0.4375rem) 0.4375rem, var(--hh-border) 0.125rem, transparent 0.1875rem),
+    radial-gradient(circle at 0.4375rem calc(100% - 0.4375rem), var(--hh-border) 0.125rem, transparent 0.1875rem),
+    radial-gradient(circle at calc(100% - 0.4375rem) calc(100% - 0.4375rem), var(--hh-border) 0.125rem, transparent 0.1875rem);
+  box-shadow: var(--hh-elevation-raised), inset 0 0.0625rem 0 color-mix(in srgb, var(--hh-surface-tray-foreground) 10%, transparent);
+}
+.hh-standby[data-size='compact'] .hh-standby-scope {
+  padding: var(--hh-space-2);
+  background-image: none;
+}
+.hh-standby-well {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--standby-ink) 12%, var(--standby-well)) 0, var(--standby-well) 70%);
+  box-shadow:
+    inset 0 0 0 var(--hh-border-width-thick) color-mix(in srgb, var(--standby-ink) 35%, var(--standby-well)),
+    inset 0 0.375rem 1rem var(--hh-shadow);
+  isolation: isolate;
+}
+.hh-standby-chart {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.hh-standby-star {
+  fill: var(--standby-star);
+}
+.hh-standby-star[data-twinkle] {
+  animation: hh-standby-twinkle 3.2s var(--hh-easing-standard) infinite alternate;
+}
+.hh-standby-star[data-twinkle]:nth-of-type(3n) {
+  animation-duration: 4.6s;
+}
+.hh-standby-grid {
+  fill: none;
+  stroke: color-mix(in srgb, var(--standby-ink) 40%, transparent);
+  stroke-width: 0.5;
+}
+.hh-standby-track {
+  stroke-dasharray: 1 3;
+}
+.hh-standby-ticks {
+  stroke: color-mix(in srgb, var(--standby-ink) 65%, transparent);
+  stroke-width: 0.7;
+}
+.hh-standby-globe {
+  fill: color-mix(in srgb, var(--standby-ink) 22%, var(--standby-well));
+  stroke: var(--standby-ink);
+  stroke-width: 0.8;
+}
+.hh-standby-atmosphere {
+  fill: color-mix(in srgb, var(--standby-ink) 7%, transparent);
+}
+.hh-standby-planet .hh-standby-terminator {
+  fill: var(--standby-well);
+  opacity: 0.6;
+}
+.hh-standby-ring {
+  fill: none;
+  stroke: color-mix(in srgb, var(--standby-ink) 70%, transparent);
+  stroke-width: 0.7;
+}
+.hh-standby-ring[data-half='back'] {
+  opacity: 0.45;
+}
+.hh-standby-bands path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--standby-ink) 35%, transparent);
+  stroke-width: 0.5;
+}
+
+/* The sweep: a conic afterglow trailing a bright leading edge. */
+.hh-standby-sweep {
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  background: conic-gradient(from 0turn, transparent 0 0.7turn, color-mix(in srgb, var(--standby-ink) 38%, transparent) 1turn);
+  animation: hh-standby-spin var(--standby-sweep) var(--hh-easing-linear) infinite;
+  pointer-events: none;
+}
+.hh-standby-sweep::after {
+  content: '';
+  position: absolute;
+  left: calc(50% - var(--hh-border-width-thin) / 2);
+  top: 0;
+  width: var(--hh-border-width-thin);
+  height: 50%;
+  background: linear-gradient(to top, transparent, var(--standby-ink));
+}
+.hh-standby-sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.hh-standby-meteor {
+  position: absolute;
+  top: 22%;
+  left: -30%;
+  width: 30%;
+  height: var(--hh-border-width-thin);
+  background: linear-gradient(90deg, transparent, var(--standby-star));
+  rotate: 16deg;
+  opacity: 0;
+  animation: hh-standby-meteor 13s var(--hh-easing-exit) 5s infinite;
+}
+.hh-standby[data-size='compact'] .hh-standby-meteor {
+  display: none;
+}
+
+/* Orbits: a ring-sized box turning about the well's centre; the craft rides its top edge and counter-turns upright. */
+.hh-standby-orbit {
+  position: absolute;
+  border-radius: 50%;
+  rotate: calc(var(--phase) * 1turn);
+  animation: hh-standby-spin var(--period) var(--hh-easing-linear) infinite;
+}
+.hh-standby-orbit[data-ring='1'] {
+  --period: 50s;
+  inset: 33%;
+}
+.hh-standby-orbit[data-ring='2'] {
+  --period: 80s;
+  inset: 22%;
+}
+.hh-standby-orbit[data-ring='3'] {
+  --period: 120s;
+  inset: 11%;
+}
+.hh-standby-craft {
+  --agent-colour: var(--standby-ink);
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 0;
+  height: 0;
+  rotate: calc(var(--phase) * -1turn);
+  animation: hh-standby-spin var(--period) var(--hh-easing-linear) infinite reverse;
+}
+/* The well stays dark in every palette, so agent colours are lifted toward the strip paper to stay legible on it
+   (Day shift's agent colours are tuned for light planes). */
+.hh-standby-craft[data-agent='1'] { --agent-colour: color-mix(in srgb, var(--hh-agent-1) 65%, var(--hh-strip)); }
+.hh-standby-craft[data-agent='2'] { --agent-colour: color-mix(in srgb, var(--hh-agent-2) 65%, var(--hh-strip)); }
+.hh-standby-craft[data-agent='3'] { --agent-colour: color-mix(in srgb, var(--hh-agent-3) 65%, var(--hh-strip)); }
+.hh-standby-craft[data-agent='4'] { --agent-colour: color-mix(in srgb, var(--hh-agent-4) 65%, var(--hh-strip)); }
+.hh-standby-craft[data-agent='5'] { --agent-colour: color-mix(in srgb, var(--hh-agent-5) 65%, var(--hh-strip)); }
+.hh-standby-craft[data-agent='6'] { --agent-colour: color-mix(in srgb, var(--hh-agent-6) 65%, var(--hh-strip)); }
+.hh-standby-craft-mark {
+  position: absolute;
+  left: -0.3rem;
+  top: -0.3rem;
+  width: 0.6rem;
+  height: 0.6rem;
+  background: var(--agent-colour);
+  box-shadow: 0 0 0 var(--hh-border-width-thick) var(--standby-well);
+  rotate: 45deg;
+}
+.hh-standby[data-size='compact'] .hh-standby-craft-mark {
+  left: -0.2rem;
+  top: -0.2rem;
+  width: 0.4rem;
+  height: 0.4rem;
+}
+.hh-standby-craft[data-relay] .hh-standby-craft-mark {
+  rotate: none;
+  border-radius: 50%;
+}
+.hh-standby-craft-mark::after {
+  content: '';
+  position: absolute;
+  inset: calc(var(--hh-space-1) * -1);
+  border: var(--hh-border-width-thin) solid var(--agent-colour);
+  border-radius: 50%;
+  opacity: 0;
+  animation: hh-standby-ping 4s var(--hh-easing-enter) var(--ping-delay, 0s) infinite;
+}
+.hh-standby-craft[data-idle] .hh-standby-craft-mark {
+  opacity: var(--hh-opacity-disabled);
+}
+.hh-standby-craft[data-idle] .hh-standby-craft-mark::after {
+  animation: none;
+}
+.hh-standby-craft-label {
+  position: absolute;
+  left: 0.625rem;
+  top: -0.5rem;
+  padding: 0 var(--hh-space-1);
+  border-radius: var(--hh-radius-sm);
+  background: color-mix(in srgb, var(--standby-well) 80%, transparent);
+  color: var(--agent-colour);
+  font-family: var(--hh-font-mono);
+  font-size: 0.625rem;
+  line-height: 1rem;
+  white-space: nowrap;
+}
+.hh-standby[data-size='compact'] .hh-standby-craft-label {
+  display: none;
+}
+
+/* The words: heading, readouts in wells, the chatter strip. */
+.hh-standby-copy {
+  display: grid;
+  justify-items: start;
+  gap: var(--hh-space-4);
+  max-width: var(--hh-layout-measure);
+}
+.hh-standby[data-size='compact'] .hh-standby-copy {
+  gap: var(--hh-space-2);
+}
+.hh-standby-copy > * {
+  margin: 0;
+}
+.hh-standby-readouts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hh-space-2);
+}
+.hh-standby-readouts > div {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--hh-space-2);
+  padding: var(--hh-space-1) var(--hh-space-3);
+  border-radius: var(--hh-radius-sm);
+  background: var(--standby-well);
+  color: var(--standby-ink);
+  box-shadow: inset 0 0 0 var(--hh-border-width-thin) color-mix(in srgb, var(--standby-ink) 50%, transparent);
+}
+.hh-standby-readouts dt {
+  font-family: var(--hh-font-condensed);
+  font-size: var(--hh-type-mono-sm-size);
+  letter-spacing: var(--hh-letter-spacing-caps);
+  text-transform: uppercase;
+}
+.hh-standby-readouts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+.hh-standby-chatter {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: calc(var(--hh-type-mono-size) * 1.5 + var(--hh-space-2) * 2);
+  padding: var(--hh-space-2) var(--hh-space-3);
+  border-radius: var(--hh-radius-sm);
+  background: var(--standby-well);
+  color: var(--standby-ink);
+  font-family: var(--hh-font-mono);
+  font-size: var(--hh-type-mono-size);
+  line-height: 1.5;
+}
+.hh-standby-chatter-line {
+  display: block;
+  animation: hh-standby-type 1.2s steps(32, end) both;
+}
+.hh-standby-chatter-line::after {
+  content: '';
+  display: inline-block;
+  width: 0.55em;
+  height: 1em;
+  margin-inline-start: var(--hh-space-1);
+  vertical-align: text-bottom;
+  background: currentColor;
+  animation: hh-standby-blink 1s steps(1, end) infinite;
+}
+.hh-standby-station {
+  margin-inline-end: var(--hh-space-1);
+  font-family: var(--hh-font-condensed);
+  font-size: var(--hh-type-mono-sm-size);
+  letter-spacing: var(--hh-letter-spacing-caps);
+}
+
+/* ---------- Full: the cinematic backdrop ---------- */
+.hh-standby[data-size='full'] {
+  --standby-void: color-mix(in srgb, var(--standby-well) 45%, black);
+  --standby-text: var(--hh-strip);
+  --standby-text-muted: color-mix(in srgb, var(--hh-strip) 76%, var(--standby-void));
+  --standby-scope: min(112vh, 92vw);
+  --standby-bar: clamp(1.25rem, 5vh, 3.25rem);
+  position: fixed;
+  inset: var(--hub-app-bar-height, var(--hh-layout-sticky-top)) 0 0;
+  z-index: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(50% 55% at 64% 48%, color-mix(in srgb, var(--standby-ink) 12%, transparent), transparent 70%),
+    radial-gradient(38% 42% at 10% 90%, color-mix(in srgb, var(--hh-agent-3) 12%, transparent), transparent 70%),
+    radial-gradient(30% 34% at 94% 8%, color-mix(in srgb, var(--hh-agent-2) 10%, transparent), transparent 70%),
+    var(--standby-void);
+  color: var(--standby-text);
+  animation: hh-standby-fade-in 1.4s var(--hh-easing-enter) both;
+}
+/* Vignette at the edges, and a floor of shadow under the title card so its words hold on any part of the chart. */
+.hh-standby[data-size='full']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(to top, var(--standby-void) 0, color-mix(in srgb, var(--standby-void) 70%, transparent) 22%, transparent 55%),
+    radial-gradient(ellipse at 60% 50%, transparent 55%, color-mix(in srgb, var(--standby-void) 85%, transparent) 100%);
+  pointer-events: none;
+}
+
+/* The shell's nav and the Feed head float over the scene on smoked panels. */
+.hh-page:has(> .hh-standby[data-size='full']) > :not(.hh-standby) {
+  position: relative;
+  z-index: 1;
+}
+.hh-page:has(> .hh-standby[data-size='full']) > .hh-page-head {
+  color: var(--hh-strip);
+}
+.hh-app-shell:has(.hh-standby[data-size='full']) > .hh-app-shell-nav {
+  position: relative;
+  z-index: 1;
+  padding: var(--hh-space-1);
+  border: var(--hh-border-width-thin) solid color-mix(in srgb, var(--hh-strip) 20%, transparent);
+  border-radius: var(--hh-radius-md);
+  background: color-mix(in srgb, var(--flight-director-well, var(--hh-code)) 78%, transparent);
+  color: var(--hh-strip);
+  backdrop-filter: blur(0.5rem);
+}
+@media (min-width: 64rem) {
+  .hh-app-shell:has(.hh-standby[data-size='full']) > .hh-app-shell-nav {
+    position: sticky;
+  }
+}
+
+/* Sky: three star depths, each drifting its own distance for parallax. */
+.hh-standby-space {
+  position: absolute;
+  inset: -4%;
+}
+.hh-standby-depth {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  animation: hh-standby-parallax 90s var(--hh-easing-standard) infinite alternate;
+}
+.hh-standby-depth[data-depth='1'] {
+  --drift: -0.6%, 0.4%;
+  opacity: 0.55;
+}
+.hh-standby-depth[data-depth='2'] {
+  --drift: -1.4%, 0.9%;
+  opacity: 0.8;
+  animation-duration: 70s;
+}
+.hh-standby-depth[data-depth='3'] {
+  --drift: -2.8%, 1.6%;
+  animation-duration: 50s;
+}
+
+/* Stage: the scope as a huge instrument floating in space, cropped by the frame. */
+.hh-standby-stage {
+  position: absolute;
+  left: 62%;
+  top: 52%;
+  width: var(--standby-scope);
+  translate: -50% -50%;
+  animation: hh-standby-focus 2.6s var(--hh-easing-enter) both;
+}
+.hh-standby-drift {
+  animation: hh-standby-camera 40s var(--hh-easing-standard) 2.6s infinite alternate;
+}
+.hh-standby[data-size='full'] .hh-standby-scope {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+.hh-standby[data-size='full'] .hh-standby-well {
+  background: radial-gradient(circle, color-mix(in srgb, var(--standby-ink) 9%, transparent) 0, transparent 68%);
+  box-shadow: inset 0 0 0 var(--hh-border-width-thin) color-mix(in srgb, var(--standby-ink) 45%, transparent);
+}
+.hh-standby[data-size='full'] .hh-standby-chart * {
+  vector-effect: non-scaling-stroke;
+}
+.hh-standby[data-size='full'] .hh-standby-chart .hh-standby-star {
+  display: none;
+}
+.hh-standby[data-size='full'] .hh-standby-grid {
+  stroke-width: 1;
+}
+.hh-standby[data-size='full'] .hh-standby-ticks {
+  stroke-width: 1.25;
+}
+.hh-standby[data-size='full'] :is(.hh-standby-globe, .hh-standby-ring) {
+  stroke-width: 1.5;
+}
+.hh-standby[data-size='full'] .hh-standby-bands path {
+  stroke-width: 1;
+}
+.hh-standby-bearings text {
+  fill: color-mix(in srgb, var(--standby-ink) 75%, transparent);
+  font-family: var(--hh-font-mono);
+  font-size: 3px;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.hh-standby[data-size='full'] .hh-standby-sweep::after {
+  width: var(--hh-border-width-thick);
+}
+.hh-standby[data-size='full'] .hh-standby-craft-mark {
+  left: -0.4rem;
+  top: -0.4rem;
+  width: 0.8rem;
+  height: 0.8rem;
+}
+.hh-standby[data-size='full'] .hh-standby-craft-label {
+  left: 0.9rem;
+  top: -0.625rem;
+  font-size: var(--hh-type-mono-sm-size);
+  line-height: 1.25rem;
+}
+
+/* Frame: HUD brackets inside the letterbox, and the track legend with the live clock. */
+.hh-standby-hud {
+  position: absolute;
+  inset: calc(var(--standby-bar) + var(--hh-space-4)) var(--hh-space-4);
+  z-index: 2;
+  pointer-events: none;
+}
+.hh-standby-corner {
+  position: absolute;
+  width: var(--hh-space-6);
+  height: var(--hh-space-6);
+  border: 0 solid color-mix(in srgb, var(--hh-strip) 45%, transparent);
+}
+.hh-standby-corner[data-corner='tl'] { top: 0; left: 0; border-top-width: var(--hh-border-width-thin); border-left-width: var(--hh-border-width-thin); }
+.hh-standby-corner[data-corner='tr'] { top: 0; right: 0; border-top-width: var(--hh-border-width-thin); border-right-width: var(--hh-border-width-thin); }
+.hh-standby-corner[data-corner='bl'] { bottom: 0; left: 0; border-bottom-width: var(--hh-border-width-thin); border-left-width: var(--hh-border-width-thin); }
+.hh-standby-corner[data-corner='br'] { bottom: 0; right: 0; border-bottom-width: var(--hh-border-width-thin); border-right-width: var(--hh-border-width-thin); }
+.hh-standby-hud-legend {
+  position: absolute;
+  top: var(--hh-space-3);
+  right: var(--hh-space-4);
+  display: grid;
+  justify-items: end;
+  gap: var(--hh-space-1);
+  color: var(--standby-text-muted);
+  font-family: var(--hh-font-condensed);
+  font-size: var(--hh-type-mono-sm-size);
+  letter-spacing: var(--hh-letter-spacing-caps);
+  text-transform: uppercase;
+  animation: hh-standby-rise 0.9s var(--hh-easing-enter) 1.8s both;
+}
+.hh-standby-hud-legend .hh-mono {
+  font-family: var(--hh-font-mono);
+  letter-spacing: var(--hh-letter-spacing-none);
+}
+.hh-standby-letterbox {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  height: var(--standby-bar);
+  background: black;
+  animation: hh-standby-bars 1.8s var(--hh-easing-enter) both;
+}
+.hh-standby-letterbox[data-edge='top'] {
+  top: 0;
+}
+.hh-standby-letterbox[data-edge='bottom'] {
+  bottom: 0;
+}
+
+/* Title card, bottom left; the chatter strip answers it bottom right. */
+.hh-standby-caption {
+  position: absolute;
+  left: calc(var(--hh-density-inset) + var(--hh-space-4));
+  right: calc(var(--hh-density-inset) + var(--hh-space-4));
+  bottom: calc(var(--standby-bar) + var(--hh-space-8));
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--hh-space-6);
+}
+.hh-standby[data-size='full'] .hh-standby-copy {
+  max-width: 36rem;
+}
+.hh-standby-title {
+  margin: 0;
+  font-family: var(--hh-font-condensed);
+  font-size: clamp(2.5rem, 6.5vw, 6rem);
+  font-weight: var(--hh-font-weight-regular);
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.hh-standby-title > span {
+  display: block;
+  animation: hh-standby-reveal 1.1s var(--hh-easing-enter) 0.9s both;
+}
+.hh-standby-title > span + span {
+  color: var(--standby-ink);
+  animation-delay: 1.08s;
+}
+.hh-standby-lead {
+  max-width: 32rem;
+  color: var(--standby-text-muted);
+  font-size: var(--hh-type-body-lg-size);
+  line-height: 1.5;
+  animation: hh-standby-rise 0.9s var(--hh-easing-enter) 1.3s both;
+}
+.hh-standby[data-size='full'] .hh-standby-readouts {
+  animation: hh-standby-rise 0.9s var(--hh-easing-enter) 1.45s both;
+}
+.hh-standby[data-size='full'] .hh-link {
+  animation: hh-standby-rise 0.9s var(--hh-easing-enter) 1.6s both;
+}
+.hh-standby[data-size='full'] .hh-standby-chatter {
+  flex: 0 1 30rem;
+  width: auto;
+  box-shadow: inset 0 0 0 var(--hh-border-width-thin) color-mix(in srgb, var(--standby-ink) 40%, transparent);
+  animation: hh-standby-rise 0.9s var(--hh-easing-enter) 1.75s both;
+}
+
+@media (max-width: 64rem) {
+  .hh-standby[data-size='full'] {
+    --standby-scope: min(125vw, 82vh);
+  }
+  .hh-standby-stage {
+    left: 50%;
+    top: 40%;
+  }
+  .hh-standby-hud-legend {
+    display: none;
+  }
+  .hh-standby-caption {
+    left: var(--hh-density-inset);
+    right: var(--hh-density-inset);
+    bottom: calc(var(--standby-bar) + var(--hh-space-4));
+  }
+}
+/* Phones: the scope rises clear of the title card, which drops its lead sentence (the readouts carry the state). */
+@media (max-width: 40rem) {
+  .hh-standby[data-size='full'] {
+    --standby-scope: min(115vw, 58vh);
+  }
+  .hh-standby-stage {
+    top: 30%;
+  }
+  .hh-standby-lead {
+    display: none;
+  }
+}
+@media (max-height: 40rem) {
+  .hh-standby-lead {
+    display: none;
+  }
+  .hh-standby-title {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+  }
+}
+
+@keyframes hh-standby-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@keyframes hh-standby-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes hh-standby-focus {
+  from {
+    opacity: 0;
+    filter: blur(0.875rem);
+    scale: 1.18;
+  }
+}
+@keyframes hh-standby-camera {
+  to {
+    transform: scale(1.05) rotate(2deg) translate(-1%, 1%);
+  }
+}
+@keyframes hh-standby-parallax {
+  to {
+    transform: translate(var(--drift));
+  }
+}
+@keyframes hh-standby-bars {
+  from {
+    height: 50%;
+  }
+}
+@keyframes hh-standby-reveal {
+  from {
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(0.35em);
+  }
+  to {
+    clip-path: inset(0 0 -0.2em 0);
+  }
+}
+@keyframes hh-standby-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--hh-space-3));
+  }
+}
+@keyframes hh-standby-twinkle {
+  to {
+    opacity: 0.2;
+  }
+}
+@keyframes hh-standby-ping {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.5);
+  }
+  45%,
+  100% {
+    opacity: 0;
+    transform: scale(3);
+  }
+}
+@keyframes hh-standby-meteor {
+  0% {
+    opacity: 0;
+    transform: translateX(0);
+  }
+  2% {
+    opacity: 1;
+  }
+  9%,
+  100% {
+    opacity: 0;
+    transform: translateX(520%);
+  }
+}
+@keyframes hh-standby-type {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0);
+  }
+}
+@keyframes hh-standby-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Reduced motion wins over every timed rule above, whatever its specificity: the scene stands still, fully revealed. */
+@media (prefers-reduced-motion: reduce) {
+  .hh-app-shell[data-nav='shown'] > .hh-app-shell-nav,
+  .hh-standby,
+  .hh-standby *,
+  .hh-standby *::before,
+  .hh-standby *::after {
+    animation: none !important;
+  }
+}

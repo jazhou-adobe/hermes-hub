@@ -36,6 +36,8 @@ This spec covers **behaviour only**: states, actions, order and keys. Visuals co
   - each shows its Outcome sentence, the Draft as "Not sent" with **Copy draft**, and **Remove from feed**.
 - **New Rounds** append at the end. Focus and scroll position never move, and a polite live-region announcement plays.
 - **Empty, loading, reconnecting and offline** states follow the design's system blueprints.
+- **Standby:** with no Pending Round, the Feed shows a tracking scope with the session's live and idle Agents in orbit, how long the Feed has been quiet, the Agent count, and rotating loop chatter. An empty Feed shows it as a full-viewport cinematic backdrop behind the shell (title card, letterbox, opening sequence); above Rounds that ended in place it sits compact. Reduced motion stills it.
+- **The side nav** hides and shows from the app-bar toggle or `[`. The choice is kept per browser. Hidden, the page takes the full width.
 
 ## Answering a Round
 
@@ -67,6 +69,7 @@ This spec covers **behaviour only**: states, actions, order and keys. Visuals co
 | `d` | Dismiss |
 | `e` | Redirect |
 | `v` | Ask advisor |
+| `[` | Show / hide the side nav |
 | `?` | Key map |
 
 - **The current Question** is the focused Question. Otherwise it is the first open, unanswered Question of the Round in view.

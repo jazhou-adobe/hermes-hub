@@ -1,10 +1,10 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Agents } from "./agents/Agents.tsx";
 import { RoundDetailPage } from "./detail/RoundDetail.tsx";
 import { Feed } from "./feed/Feed.tsx";
 import { hhmm } from "./format.ts";
 import { Icon, type IconName } from "./icons.tsx";
-import { KeyMapDialog, showKeyMap } from "./keys.tsx";
+import { isTextField, KeyMapDialog, showKeyMap } from "./keys.tsx";
 import { Log } from "./log/Log.tsx";
 import { linkClick, parseRoute, usePath } from "./router.ts";
 import { Settings } from "./settings/Settings.tsx";
@@ -97,12 +97,49 @@ const TITLES: Record<string, string> = {
   "not-found": "Not found",
 };
 
+/** Whether the side nav is hidden, kept per browser. */
+const NAV_KEY = "hermes-hub.nav";
+
 export function App() {
   const route = parseRoute(usePath());
   const pending = useStore((s) => s.rounds.filter((r) => r.status === "pending").length);
   const agents = useStore((s) => s.agents.length);
   const theme = useStore((s) => s.settings.theme);
   const palette = useStore((s) => s.settings.palette);
+  const shortcuts = useStore((s) => s.settings.shortcuts);
+  // "shown" only after a toggle, so the nav slides in when called back but not on every page load.
+  const [nav, setNav] = useState<"hidden" | "shown" | "default">(() => (localStorage.getItem(NAV_KEY) === "hidden" ? "hidden" : "default"));
+  const navHidden = nav === "hidden";
+  const toggleNav = () => setNav((n) => (n === "hidden" ? "shown" : "hidden"));
+  const navToggle = useRef<HTMLButtonElement>(null);
+  const appBar = useRef<HTMLElement>(null);
+
+  // The app bar's live height (it wraps on narrow screens), for full-viewport layers that start below it.
+  useEffect(() => {
+    const bar = appBar.current;
+    if (!bar) return;
+    const observer = new ResizeObserver(() => document.documentElement.style.setProperty("--hub-app-bar-height", `${bar.offsetHeight}px`));
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (navHidden) localStorage.setItem(NAV_KEY, "hidden");
+    else localStorage.removeItem(NAV_KEY);
+  }, [navHidden]);
+
+  // `[` shows or hides the side nav; focus leaving a nav that hides lands on the toggle.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "[" || !shortcuts || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || isTextField(e.target as Element)) return;
+      if (document.querySelector("dialog[open]")) return;
+      e.preventDefault();
+      if (document.activeElement?.closest("#side-nav")) navToggle.current?.focus();
+      toggleNav();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [shortcuts]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -120,7 +157,26 @@ export function App() {
       <a className="hh-skip-link" href="#main">
         Skip to content
       </a>
-      <header className="hh-app-bar">
+      <header className="hh-app-bar" ref={appBar}>
+        <span className="hh-tooltip-anchor">
+          <button
+            ref={navToggle}
+            type="button"
+            className="hh-icon-button"
+            data-variant="ghost"
+            aria-label={navHidden ? "Show navigation" : "Hide navigation"}
+            aria-controls="side-nav"
+            aria-expanded={!navHidden}
+            aria-describedby="tip-nav"
+            onClick={toggleNav}
+          >
+            <Icon name="menu" />
+          </button>
+          <span className="hh-tooltip" role="tooltip" id="tip-nav">
+            {navHidden ? "Show navigation" : "Hide navigation"}
+            {shortcuts ? " · [" : ""}
+          </span>
+        </span>
         <span className="hh-app-bar-brand">Hub · {location.host}</span>
         <span className="hh-live-value" data-live={pending > 0 ? "true" : undefined}>
           Pending · {pending}
@@ -144,8 +200,8 @@ export function App() {
           </span>
         </span>
       </header>
-      <div className="hh-app-shell">
-        <nav className="hh-side-nav hh-app-shell-nav" aria-label="Command Center">
+      <div className="hh-app-shell" data-nav={nav === "default" ? undefined : nav}>
+        <nav className="hh-side-nav hh-app-shell-nav" id="side-nav" aria-label="Command Center" hidden={navHidden}>
           <NavLink to="/" icon="bay" current={route.name === "feed"}>
             Feed
             <span className="hh-side-nav-count">

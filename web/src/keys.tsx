@@ -13,6 +13,7 @@ export const KEY_MAP: [string, string][] = [
   ["d", "Dismiss"],
   ["e", "Redirect"],
   ["v", "Ask advisor"],
+  ["[", "Show / hide the side navigation"],
   ["?", "Key map"],
 ];
 
