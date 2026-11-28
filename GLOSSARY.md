@@ -113,3 +113,13 @@ _Avoid_: mailbox, queue, outbox
 **Live / Idle / Gone**:
 How recently an Agent last contacted the Hub; it never changes a Round.
 _Avoid_: online, offline, connected
+
+### Design review
+
+**Design Review**:
+One Agent's request for the Human to judge HTML designs (approve or reject, pick a variant, comment, score), carried through successive Revisions until the Human approves or stops it.
+_Avoid_: review (alone), proof, board, mockup
+
+**Revision**:
+One submitted version of a Design Review's content; the Human sends feedback and verdicts on each Revision once, and comments carry forward to the next.
+_Avoid_: version, iteration, draft
