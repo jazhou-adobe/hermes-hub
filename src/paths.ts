@@ -26,5 +26,7 @@ export const configPath = () => join(hubHome(), "config.toml");
 export const logPath = () => join(hubHome(), "logs", "hub.log");
 export const backupsDir = () => join(hubHome(), "backups");
 export const projectsPath = () => join(hubHome(), "projects.json");
+/** Remote access credentials (security spec), written by `hermes-hub password`. */
+export const remoteAuthPath = () => join(hubHome(), "remote-auth.json");
 /** The Hub Skill as shipped in this clone (hub-skill spec, Packaging). */
 export const SKILL_SOURCE = join(CLONE_ROOT, "skill", "hermes-hub");

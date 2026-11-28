@@ -38,6 +38,8 @@ export interface AutoAskRule {
 /** Everything in `config.toml` (hub-operations spec). */
 export interface HubConfig {
   port: number;
+  /** The bind address (security spec): `0.0.0.0` lets other machines in behind Basic auth, `127.0.0.1` keeps the Hub on this Mac. */
+  host: string;
   log_level: LogLevel;
   limits: HubLimits;
   backups: BackupSettings;
@@ -49,6 +51,7 @@ export type ConfigSource = "file" | "default";
 
 export interface ConfigSources {
   port: ConfigSource;
+  host: ConfigSource;
   log_level: ConfigSource;
   limits: Record<keyof HubLimits, ConfigSource>;
   backups: Record<keyof BackupSettings, ConfigSource>;
@@ -57,6 +60,7 @@ export interface ConfigSources {
 }
 
 export const DEFAULT_PORT = 4747;
+export const DEFAULT_HOST = "0.0.0.0";
 const DEFAULT_LOG_LEVEL: LogLevel = "info";
 const DEFAULT_LIVE_MS = 2 * 60_000;
 const DEFAULT_IDLE_MS = 30 * 60_000;
@@ -105,6 +109,7 @@ function parseAutoAsk(raw: unknown, path: string, advisorNames: Set<string>): Au
 
 export const DEFAULT_CONFIG: HubConfig = {
   port: DEFAULT_PORT,
+  host: DEFAULT_HOST,
   log_level: DEFAULT_LOG_LEVEL,
   limits: {
     attachment_bytes: LIMITS.attachment_bytes,
@@ -121,6 +126,7 @@ export const DEFAULT_CONFIG: HubConfig = {
 function defaultSources(): ConfigSources {
   return {
     port: "default",
+    host: "default",
     log_level: "default",
     limits: { attachment_bytes: "default", round_bytes: "default", pending_per_session: "default", live_ms: "default", idle_ms: "default" },
     backups: { keep: "default" },
@@ -184,6 +190,15 @@ export function loadConfigDetailed(path: string): LoadedConfig {
     path,
     "port must be an integer from 1 to 65535",
   );
+  const host = pick(
+    raw,
+    "host",
+    DEFAULT_HOST,
+    // Local tools reach the Hub at 127.0.0.1 (hub.json), so the bind must include loopback.
+    (v): v is string => v === "0.0.0.0" || v === "127.0.0.1",
+    path,
+    'host must be "0.0.0.0" (this Mac and the network) or "127.0.0.1" (this Mac only)',
+  );
   const log_level = pick(
     raw,
     "log_level",
@@ -211,6 +226,7 @@ export function loadConfigDetailed(path: string): LoadedConfig {
   return {
     config: {
       port: port.value,
+      host: host.value,
       log_level: log_level.value,
       limits: {
         attachment_bytes: attachment_bytes.value,
@@ -225,6 +241,7 @@ export function loadConfigDetailed(path: string): LoadedConfig {
     },
     sources: {
       port: port.source,
+      host: host.source,
       log_level: log_level.source,
       limits: {
         attachment_bytes: attachment_bytes.source,

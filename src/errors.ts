@@ -12,6 +12,7 @@ export const HTTP_STATUS: Record<string, number> = {
   flood_cap: 429,
   unknown_session: 401,
   forbidden: 403,
+  auth_required: 401,
   advisor_cannot_ask: 403,
   advisor_not_found: 404,
   invalid_answer: 422,
@@ -23,7 +24,7 @@ export const HTTP_STATUS: Record<string, number> = {
 /** CLI exit codes (transports spec). */
 export function exitCodeFor(code: string): number {
   if (code === "hub_unavailable") return 3;
-  if (code === "unknown_session" || code === "forbidden") return 5;
+  if (code === "unknown_session" || code === "forbidden" || code === "auth_required") return 5;
   return 4;
 }
 

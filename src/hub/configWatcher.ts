@@ -8,13 +8,15 @@ export interface ConfigReload {
 }
 
 /**
- * Re-reads `config.toml`. The port can't change live: the result keeps serving on `previous.port`
- * and sets `restartNeeded`, while every other field reloads from the file. Throws on a parse error
+ * Re-reads `config.toml`. The port and host can't change live: the result keeps serving on the previous
+ * ones and sets `restartNeeded`, while every other field reloads from the file. Throws on a parse error
  * or an invalid value — callers keep `previous` rather than apply partial garbage.
  */
 export function reloadConfig(path: string, previous: HubConfig): ConfigReload {
   const { config } = loadConfigDetailed(path);
-  if (config.port !== previous.port) return { config: { ...config, port: previous.port }, restartNeeded: true };
+  if (config.port !== previous.port || config.host !== previous.host) {
+    return { config: { ...config, port: previous.port, host: previous.host }, restartNeeded: true };
+  }
   return { config, restartNeeded: false };
 }
 

@@ -1,8 +1,9 @@
 import { rmSync, writeFileSync } from "node:fs";
+import { RemoteAuth, remoteAccessLine } from "./auth.ts";
 import { refreshUncommittedSkills } from "../cli/skill.ts";
 import { loadConfig, type HubConfig } from "../config.ts";
 import { migrationStatus, openDb } from "../db/db.ts";
-import { backupsDir, configPath, dbPath, hubJsonPath, hubLockPath, logPath } from "../paths.ts";
+import { backupsDir, configPath, dbPath, hubJsonPath, hubLockPath, logPath, remoteAuthPath } from "../paths.ts";
 import { VERSION } from "../version.ts";
 import { ensureDailyBackup } from "./backup.ts";
 import { watchConfig } from "./configWatcher.ts";
@@ -22,10 +23,10 @@ function isAddrInUse(err: unknown): boolean {
 }
 
 /** The next free port from `start`, probed with a throwaway listener (same trick the tests use). */
-function freePortFrom(start: number): number {
+function freePortFrom(start: number, hostname: string): number {
   for (let port = start; port < start + MAX_PORT_ATTEMPTS; port++) {
     try {
-      const probe = Bun.listen({ hostname: "127.0.0.1", port, socket: { data() {} } });
+      const probe = Bun.listen({ hostname, port, socket: { data() {} } });
       probe.stop(true);
       return port;
     } catch (err) {
@@ -54,7 +55,7 @@ export async function runHub(): Promise<number | undefined> {
 
   let config: HubConfig = loadConfig();
   const logger = createLogger(logPath(), config.log_level);
-  const port = freePortFrom(config.port);
+  const port = freePortFrom(config.port, config.host);
   const url = `http://127.0.0.1:${port}`;
   const lockPath = hubLockPath();
   const lock = acquireLock(lockPath, url);
@@ -72,7 +73,7 @@ export async function runHub(): Promise<number | undefined> {
   const poster = osascriptPoster();
   const notifier = poster ? new Notifier(engine, poster, undefined, logger) : undefined;
   notifier?.start();
-  const server = await startServer(engine, port, logger, notifier);
+  const server = await startServer(engine, port, logger, notifier, undefined, { hostname: config.host, auth: new RemoteAuth(remoteAuthPath()) });
   writeFileSync(
     hubJson,
     `${JSON.stringify({ url, version: VERSION, pid: process.pid, started_at: new Date().toISOString() }, null, 2)}\n`,
@@ -96,8 +97,8 @@ export async function runHub(): Promise<number | undefined> {
       logger.setLevel(config.log_level);
       engine.setConfig(config, reload.restartNeeded);
       if (reload.restartNeeded) {
-        logger.log("warn", "config.restart_needed", { setting: "port" });
-        console.warn("hermes-hub hub: config.toml's port changed; restart needed to apply it");
+        logger.log("warn", "config.restart_needed", { setting: "port or host" });
+        console.warn("hermes-hub hub: config.toml's port or host changed; restart needed to apply it");
       } else {
         logger.log("info", "config.reloaded", {});
       }
@@ -123,6 +124,8 @@ export async function runHub(): Promise<number | undefined> {
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
   console.log(`Hermes Hub ${VERSION} on ${url}`);
+  const remote = remoteAccessLine(config.host, port, remoteAuthPath());
+  if (remote) console.log(`hermes-hub hub: ${remote}`);
   // Hub Skill copies (hub-skill spec): only uncommitted ones, so the Hub never makes a surprise diff.
   try {
     for (const line of await refreshUncommittedSkills()) {

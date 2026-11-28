@@ -1,8 +1,10 @@
 import { spawn } from "node:child_process";
 import { closeSync, mkdirSync, openSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { loadConfig } from "../config.ts";
+import { remoteAccessLine } from "../hub/auth.ts";
 import { pidAlive, runningHub } from "../hub/lock.ts";
-import { CLI_MAIN, hubHome, hubJsonPath, hubLockPath } from "../paths.ts";
+import { CLI_MAIN, hubHome, hubJsonPath, hubLockPath, remoteAuthPath } from "../paths.ts";
 
 /** How long `start` waits for the Hub to write `hub.json`; the first start bundles the Command Center. */
 const START_TIMEOUT_MS = 60_000;
@@ -54,6 +56,9 @@ export async function startHub(): Promise<number> {
     const url = startedUrl(pid);
     if (url) {
       console.log(`Hermes Hub on ${url} (pid ${pid}); data in ${home}; output in ${outPath}`);
+      // The Hub started with this config, so it parses; the port is the one it found free.
+      const remote = remoteAccessLine(loadConfig().host, Number(new URL(url).port), remoteAuthPath());
+      if (remote) console.log(remote);
       return 0;
     }
     if (exitCode !== undefined) {

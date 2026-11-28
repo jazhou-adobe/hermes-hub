@@ -10,7 +10,7 @@ Decided with the Human on 2026-11-27, choosing between a launcher, a menu-bar ap
 
 | Area | Behaviour |
 |---|---|
-| Hub URL | **Hermes Hub → Hub URL… (⌘,)**. The default is `http://127.0.0.1:4747/`. It's stored in the app's user defaults (`com.adobe.jazhou.hermes-hub`, key `hubURL`) and must be `http(s)://host[:port]`. The Hub's browser guard still accepts only `127.0.0.1` and `localhost` (security spec). |
+| Hub URL | **Hermes Hub → Hub URL… (⌘,)**. The default is `http://127.0.0.1:4747/`. It's stored in the app's user defaults (`com.adobe.jazhou.hermes-hub`, key `hubURL`) and must be `http(s)://host[:port]`. A Hub on another Mac needs Basic auth (security spec), which the app doesn't prompt for: open that Hub in a browser instead. |
 | Hub unreachable | An in-app page names the URL and the error, with **Retry** and **Change Hub URL…**. |
 | Navigation | Pages on the Hub's origin stay in the window. Any other link, `target=_blank` or `window.open` opens in the default browser. **View → Open in Browser (⇧⌘O)** opens the current page there. |
 | Menus | The Edit menu is there so ⌘C/⌘V/⌘A reach the page. View has Reload (⌘R), Back/Forward (⌘[ / ⌘]), zoom (⌘0, ⌘+, ⌘−) and full screen. |

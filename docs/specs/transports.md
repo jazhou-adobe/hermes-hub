@@ -72,6 +72,7 @@ Each error has a stable `code`. Over HTTP it is sent as `application/problem+jso
 | `flood_cap` | 429 | More than the allowed number of pending Rounds for the session | `limit`, `oldest_round_id` |
 | `unknown_session` | 401 | Missing or unknown `Hermes-Session` token on an endpoint that needs a session | |
 | `forbidden` | 403 | Host or Origin refused by the browser guard (security spec) | |
+| `auth_required` | 401 | A request from another machine without valid Basic auth (security spec); sent with `WWW-Authenticate: Basic` | |
 | `advisor_cannot_ask` | 403 | A session or Round requested from an Advisor run (`HERMES_ADVISOR` set; [delegation spec](delegation.md)) | |
 | `invalid_project` | 422 | A `/v1/projects` body is not `{root: absolute path, committed: boolean}` (or `{root}` to forget) | |
 | `hub_unavailable` | — | Client side only: the Hub can't be reached (it is down, or a sandbox blocks the connection). The message asks for `hermes-hub start` and points to the Hub Skill's sandbox setup: `hermes-hub doctor`. | |
@@ -116,6 +117,7 @@ Run through the wrapper `<clone>/bin/hermes-hub` by its path ([operations](hub-o
 | `hermes-hub start` | starts the Hub detached in the data folder; output in `logs/hub.out`; exits 1 if it exits early or a Hub already runs there |
 | `hermes-hub stop` | stops the Hub holding the data folder's `hub.lock` (SIGTERM, waits 15 s); exits 1 if none runs |
 | `hermes-hub restart` | `stop` if a Hub holds the data folder's `hub.lock`, then `start`; exits 1 if either step fails |
+| `hermes-hub password [--user <name>] [--remove]` | sets the Basic auth password other devices sign in with (`remote-auth.json`, argon2id hash), or removes it; applies to the running Hub at once |
 | `hermes-hub hub` | runs the Hub in the foreground (Ctrl-C) |
 
 **Output (line markers):**
@@ -138,7 +140,7 @@ ANSWER {"schema":"hermes.answer/v1","round_id":"r_01jd3k8w2m","outcome":"answere
 | `2` | Usage error |
 | `3` | `hub_unavailable` |
 | `4` | Rejected: `invalid_round`, `too_large`, `unsupported_schema`, `idempotency_conflict`, `round_ended`, `flood_cap`, `not_found`, `advisor_cannot_ask`, `invalid_project` |
-| `5` | `unknown_session` or `forbidden` |
+| `5` | `unknown_session`, `forbidden` or `auth_required` |
 
 ## Left to other tickets
 

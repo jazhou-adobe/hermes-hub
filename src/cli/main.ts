@@ -7,7 +7,7 @@ import { exitCodeFor, HubError } from "../errors.ts";
 import { backupNow, manualBackupPath, restoreBackup } from "../hub/backup.ts";
 import { runHub } from "../hub/run.ts";
 import { runningHub } from "../hub/lock.ts";
-import { backupsDir, configPath, dbPath, hubLockPath } from "../paths.ts";
+import { backupsDir, configPath, dbPath, hubLockPath, remoteAuthPath } from "../paths.ts";
 import type { Answer } from "../schema/types.ts";
 import { serveShim } from "../mcp/shim.ts";
 import { VERSION } from "../version.ts";
@@ -16,6 +16,8 @@ import { hubUrl } from "./discovery.ts";
 import { runDoctor } from "./doctor.ts";
 import { detectSession } from "./identity.ts";
 import { restartHub, startHub, stopHub } from "./service.ts";
+import { runPassword } from "./password.ts";
+import { readRemoteAuth } from "../hub/auth.ts";
 import { setupClaude } from "./setup.ts";
 import { fileProjects, findRepos, gitRoot, installSkill, staleSkillWarning, updateAllSkills, updateSkill, type ProjectStore } from "./skill.ts";
 
@@ -26,6 +28,7 @@ const USAGE = `usage: bin/hermes-hub <command>   (run it by path; nothing is ins
   hermes-hub restart                 stop the Hub on this data folder if it runs, then start it again
   hermes-hub hub                     run the Hub in the foreground (Ctrl-C stops it)
   hermes-hub config                  print the effective settings and their source
+  hermes-hub password [--user <name>] [--remove]   set (or remove) the Basic auth password other devices sign in with
   hermes-hub backup [path]           take a backup now (default: backups/hub-manual-<timestamp>.db in the Hub's folder)
   hermes-hub restore <backup>        restore the database from a backup (the Hub must not be running)
   hermes-hub ask <file|-> [--no-wait] [--out <file>] [--supersedes <round-id>] [identity]
@@ -42,7 +45,7 @@ const USAGE = `usage: bin/hermes-hub <command>   (run it by path; nothing is ins
 identity: [--label <label>] [--kind <kind>] [--session <id>]
 
 The Hub's files (hub.db, config.toml, logs/, backups/, …) live in $HERMES_HUB_HOME, or the folder
-where you run migrate, start, stop, hub, config, backup or restore. Agent commands find the Hub through
+where you run migrate, start, stop, hub, config, password, backup or restore. Agent commands find the Hub through
 HERMES_HUB_URL, then $HERMES_HUB_HOME/hub.json, then http://127.0.0.1:4747.`;
 
 /** `projects.json`: the file when HERMES_HUB_HOME names the Hub's folder, otherwise the running Hub keeps it. */
@@ -184,6 +187,16 @@ function runMigrate(): number {
   }
 }
 
+/** Whether other devices can sign in (security spec); never prints the hash. */
+function remotePasswordLine(): string {
+  try {
+    const creds = readRemoteAuth(remoteAuthPath());
+    return creds ? `set for user "${creds.username}" (${remoteAuthPath()})` : "not set: other devices are refused (hermes-hub password)";
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
+
 function runConfig(): number {
   let loaded;
   try {
@@ -196,6 +209,7 @@ function runConfig(): number {
   console.log(
     [
       `port = ${config.port} (${sources.port})`,
+      `host = ${config.host} (${sources.host})`,
       `log_level = ${config.log_level} (${sources.log_level})`,
       `limits.attachment_bytes = ${config.limits.attachment_bytes} (${sources.limits.attachment_bytes})`,
       `limits.round_bytes = ${config.limits.round_bytes} (${sources.limits.round_bytes})`,
@@ -205,6 +219,7 @@ function runConfig(): number {
       `backups.keep = ${config.backups.keep} (${sources.backups.keep})`,
       `advisor = [${config.advisors.map((a) => a.name).join(", ")}] (${sources.advisors})`,
       `auto_ask = ${config.autoAsk.length} rule(s) (${sources.autoAsk})`,
+      `remote password = ${remotePasswordLine()}`,
     ].join("\n"),
   );
   return 0;
@@ -322,6 +337,10 @@ async function main(argv: string[]): Promise<number | undefined> {
         return await restartHub();
       case "config":
         return runConfig();
+      case "password": {
+        const { values } = parse(rest, { user: { type: "string" }, remove: { type: "boolean" } }, 0);
+        return await runPassword(values);
+      }
       case "backup":
         return runBackup(rest);
       case "restore":

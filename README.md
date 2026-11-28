@@ -57,6 +57,18 @@ hermes-hub watch                                                      # one ANSW
 
 The Command Center lives at the Hub's URL: the Feed (`/`), Round detail (`/rounds/<id>`), the answered log (`/log`), Agents with Lanes (`/agents`) and Settings (`/settings`). Press `?` there for the key map.
 
+### Other devices (iPad, another computer)
+
+The Hub listens on the network (`host = "0.0.0.0"`, the default) but refuses every other device until you set a password. This Mac never needs it, so the CLI, Agents and the macOS app are unaffected.
+
+```bash
+cd <data folder>                       # or set HERMES_HUB_HOME
+<clone>/bin/hermes-hub password        # asks twice; user "hermes" (or --user <name>); 12+ characters
+<clone>/bin/hermes-hub restart         # prints "other devices: http://192.168.1.20:4747/, …"
+```
+
+On the iPad, open one of those addresses in Safari, sign in with the user and password, then **Share → Add to Home Screen** for a full-screen icon. The password takes effect without a restart; `hermes-hub password --remove` turns remote access off, and `host = "127.0.0.1"` in `config.toml` (then a restart) stops listening on the network. It is plain HTTP: on a shared Wi-Fi anyone watching can read the traffic, so prefer Tailscale (use the Mac's `100.x` address; MagicDNS names are refused). Details: [security spec](docs/specs/security.md).
+
 ### The macOS app (optional)
 
 `Hermes Hub.app` is a native window around the Command Center ([spec](docs/specs/macos-app.md)). It doesn't start or stop the Hub: keep using `hermes-hub start`/`stop`/`restart`. Build it with the Xcode command line tools, then drag it to `/Applications` if you like:

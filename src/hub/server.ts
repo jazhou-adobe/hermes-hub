@@ -4,6 +4,7 @@ import { HTTP_STATUS, HubError } from "../errors.ts";
 import { hubMcpHandler } from "../mcp/hub.ts";
 import { realTimers, type Timers } from "../mcp/tools.ts";
 import { CLONE_ROOT } from "../paths.ts";
+import { hostAllowed, isLoopback, type RemoteAuth } from "./auth.ts";
 import { fileProjects, isProjectRecord } from "../cli/skill.ts";
 import type { Answer, Outcome } from "../schema/types.ts";
 import type { Engine, HubEvent, LogFilter } from "./engine.ts";
@@ -32,20 +33,30 @@ function problem(err: HubError): Response {
 }
 
 /**
- * Browser guard (security spec): Host allowlist against DNS rebinding, Origin and Fetch-Metadata
- * against cross-site requests, and JSON-only state changes. Requests without an Origin (CLI, shim,
- * curl) pass the Origin check.
+ * Browser guard (security spec): Host allowlist against DNS rebinding (loopback names, IP literals and
+ * this machine's own name), same-origin and Fetch-Metadata checks against cross-site requests, and
+ * JSON-only state changes. Requests without an Origin (CLI, shim, curl) pass the Origin check.
  */
 function guard(req: Request, port: number): void {
-  const local = [`127.0.0.1:${port}`, `localhost:${port}`];
-  if (!local.includes(req.headers.get("host") ?? "")) throw new HubError("forbidden", "Host not allowed");
+  const host = req.headers.get("host");
+  if (!hostAllowed(host, port)) throw new HubError("forbidden", "Host not allowed");
   const origin = req.headers.get("origin");
-  if (origin !== null && !local.some((h) => origin === `http://${h}`)) throw new HubError("forbidden", "cross-origin request refused");
+  if (origin !== null && origin !== `http://${host}`) throw new HubError("forbidden", "cross-origin request refused");
   if (req.headers.get("sec-fetch-site") === "cross-site") throw new HubError("forbidden", "cross-site request refused");
   if (req.method !== "GET" && req.method !== "HEAD" && !JSON_TYPE.test(req.headers.get("content-type") ?? "")) {
     throw new HubError("forbidden", "state-changing requests must be application/json");
   }
 }
+
+/** Where the Hub listens and how it lets other machines in (security spec). */
+export interface Network {
+  /** The bind address: `127.0.0.1` keeps the Hub on this Mac, `0.0.0.0` opens it to the network. */
+  hostname: string;
+  /** Basic auth for requests that don't come from loopback. */
+  auth: RemoteAuth;
+}
+
+const REMOTE_REALM = 'Basic realm="Hermes Hub", charset="UTF-8"';
 
 type Handler<P extends string> = (req: Bun.BunRequest<P>, server: Server<undefined>) => Response | Promise<Response>;
 
@@ -142,6 +153,8 @@ export async function startServer(
   notifier?: Notifier,
   /** Bounds `/mcp`'s blocking waits; tests pass fake timers. */
   mcpTimers: Timers = realTimers,
+  /** Omitted: loopback only, as in tests. */
+  network?: Network,
 ): Promise<Server<undefined>> {
   const session = (req: Request) => engine.sessionFor(req.headers.get("Hermes-Session"));
   const development = process.env.NODE_ENV === "development";
@@ -153,6 +166,14 @@ export async function startServer(
       const started = performance.now();
       let res: Response;
       try {
+        // Another machine must pass Basic auth first; this Mac never does (security spec).
+        if (!isLoopback(server.requestIP(req)?.address)) {
+          const verdict = network ? await network.auth.check(req.headers.get("authorization")) : "no_password";
+          if (verdict === "no_password") {
+            throw new HubError("forbidden", "remote access is off until a password is set: run hermes-hub password on the Hub's Mac");
+          }
+          if (verdict === "denied") throw new HubError("auth_required", "sign in with the Hub's remote username and password");
+        }
         guard(req, server.port!);
         res = await fn(req, server);
       } catch (err) {
@@ -161,6 +182,8 @@ export async function startServer(
           logger.log("error", "http.error", { method: req.method, path, error: err instanceof Error ? err.message : String(err) });
         }
         res = problem(hubErr);
+        // The browser shows its sign-in sheet for this header (iPad Safari included).
+        if (hubErr.code === "auth_required") res.headers.set("WWW-Authenticate", REMOTE_REALM);
       }
       logger.log("info", "http.request", { method: req.method, path, status: res.status, duration_ms: Math.round(performance.now() - started) });
       res.headers.set("X-Content-Type-Options", "nosniff");
@@ -207,7 +230,7 @@ export async function startServer(
   }
 
   return Bun.serve({
-    hostname: "127.0.0.1",
+    hostname: network?.hostname ?? "127.0.0.1",
     port,
     development,
     routes: {

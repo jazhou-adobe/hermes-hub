@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import type { Server } from "bun";
+import { mkdtempSync, rmSync } from "node:fs";
+import { networkInterfaces, tmpdir } from "node:os";
+import { join } from "node:path";
 import { migrate } from "../src/db/db.ts";
+import { hostAllowed, RemoteAuth, writeRemoteAuth } from "../src/hub/auth.ts";
 import { Engine } from "../src/hub/engine.ts";
 import { startServer } from "../src/hub/server.ts";
 
@@ -209,5 +213,48 @@ describe("Agent roster endpoints", () => {
     // The cancelled Round stays in the Feed, ended in place (lifecycle spec), until removed.
     const rounds = (await (await fetch(`${url}/cc/rounds`)).json()).rounds;
     expect(rounds).toMatchObject([{ status: "cancelled" }]);
+  });
+});
+
+describe("remote access (security spec)", () => {
+  test("the guard accepts loopback names, IP literals and this machine's name, and refuses other names", () => {
+    for (const host of ["127.0.0.1:4747", "localhost:4747", "192.168.1.20:4747", "100.101.102.103:4747", "[::1]:4747"]) {
+      expect(hostAllowed(host, 4747)).toBe(true);
+    }
+    for (const host of ["evil.example:4747", "192.168.1.20:80", "192.168.1.20", null]) expect(hostAllowed(host, 4747)).toBe(false);
+  });
+
+  // Reaching the Hub through a non-loopback address needs one on this machine; CI without a network skips.
+  const lan = Object.values(networkInterfaces())
+    .flat()
+    .find((a) => a && a.family === "IPv4" && !a.internal)?.address;
+
+  test.skipIf(!lan)("another machine is refused without a password, needs Basic auth with one, and loopback never does", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "hh-auth-"));
+    const authPath = join(dir, "remote-auth.json");
+    try {
+      const db = new Database(":memory:", { strict: true });
+      migrate(db);
+      const port = freePort();
+      servers.push(await startServer(new Engine(db, `http://127.0.0.1:${port}`), port, undefined, undefined, undefined, { hostname: "0.0.0.0", auth: new RemoteAuth(authPath) }));
+      const remote = `http://${lan}:${port}/v1/hub`;
+
+      const noPassword = await fetch(remote);
+      expect(noPassword.status).toBe(403);
+      expect((await noPassword.json()).detail).toContain("hermes-hub password");
+
+      await writeRemoteAuth(authPath, "hermes", "correct horse battery");
+      const anonymous = await fetch(remote);
+      expect(anonymous.status).toBe(401);
+      expect(anonymous.headers.get("www-authenticate")).toContain("Basic");
+      const wrong = await fetch(remote, { headers: { Authorization: `Basic ${btoa("hermes:nope")}` } });
+      expect(wrong.status).toBe(401);
+      const right = await fetch(remote, { headers: { Authorization: `Basic ${btoa("hermes:correct horse battery")}` } });
+      expect(right.status).toBe(200);
+
+      expect((await fetch(`http://127.0.0.1:${port}/v1/hub`)).status).toBe(200);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
