@@ -28,6 +28,11 @@
   overflow-wrap: anywhere;
 }
 
+/* Hub addition: the Feed's counts sit in the app bar beside Pending, as secondary metadata. */
+.hh-app-bar-stat {
+  color: var(--hh-muted-foreground);
+}
+
 /* Hub addition (web/preview/GAPS.md, "Hub additions"): the side nav hides from the app-bar toggle or `[`. Hidden, the
    page takes the full width; called back, the nav slides in from the start edge. */
 @media (min-width: 64rem) {
@@ -364,17 +369,13 @@
   --standby-void: color-mix(in srgb, var(--standby-well) 45%, black);
   --standby-text: var(--hh-strip);
   --standby-text-muted: color-mix(in srgb, var(--hh-strip) 76%, var(--standby-void));
-  --standby-scope: min(112vh, 92vw);
+  --standby-scope: min(128vh, 100vw);
   --standby-bar: clamp(1.25rem, 5vh, 3.25rem);
   position: fixed;
   inset: var(--hub-app-bar-height, var(--hh-layout-sticky-top)) 0 0;
   z-index: 0;
   overflow: hidden;
-  background:
-    radial-gradient(50% 55% at 64% 48%, color-mix(in srgb, var(--standby-ink) 12%, transparent), transparent 70%),
-    radial-gradient(38% 42% at 10% 90%, color-mix(in srgb, var(--hh-agent-3) 12%, transparent), transparent 70%),
-    radial-gradient(30% 34% at 94% 8%, color-mix(in srgb, var(--hh-agent-2) 10%, transparent), transparent 70%),
-    var(--standby-void);
+  background: var(--standby-void);
   color: var(--standby-text);
   animation: hh-standby-fade-in 1.4s var(--hh-easing-enter) both;
 }
@@ -395,8 +396,14 @@
   position: relative;
   z-index: 1;
 }
+/* The title card names the page, so the Feed head stays for focus and screen readers only. */
 .hh-page:has(> .hh-standby[data-size='full']) > .hh-page-head {
-  color: var(--hh-strip);
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .hh-app-shell:has(.hh-standby[data-size='full']) > .hh-app-shell-nav {
   position: relative;
@@ -414,37 +421,72 @@
   }
 }
 
-/* Sky: three star depths, each drifting its own distance for parallax. */
+/* Sky: the Milky Way photograph (ESO/S. Brunier, CC BY 4.0), graded toward the palette's phosphor, drifting slowly;
+   bright glints drift faster on a nearer depth; the sun sits off-frame upper left with an anamorphic streak. */
 .hh-standby-space {
   position: absolute;
   inset: -4%;
 }
-.hh-standby-depth {
+.hh-standby-space::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--standby-ink);
+  mix-blend-mode: color;
+  opacity: 0.16;
+  pointer-events: none;
+}
+.hh-standby-photo {
+  --drift: -1.2%, 0.8%;
+  position: absolute;
+  inset: 0;
+  background: url('./assets/standby/milky-way.webp') center / cover no-repeat;
+  filter: brightness(0.85) saturate(0.75);
+  animation: hh-standby-parallax 120s var(--hh-easing-standard) infinite alternate;
+}
+.hh-standby-glints {
+  --drift: -2.8%, 1.6%;
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  animation: hh-standby-parallax 90s var(--hh-easing-standard) infinite alternate;
+  animation: hh-standby-parallax 50s var(--hh-easing-standard) infinite alternate;
 }
-.hh-standby-depth[data-depth='1'] {
-  --drift: -0.6%, 0.4%;
-  opacity: 0.55;
+.hh-standby-sun {
+  position: absolute;
+  top: 12%;
+  left: 14%;
+  width: 34vmax;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    var(--hh-strip) 0,
+    color-mix(in srgb, var(--standby-ink) 32%, transparent) 5%,
+    color-mix(in srgb, var(--standby-ink) 9%, transparent) 28%,
+    transparent 62%
+  );
+  mix-blend-mode: screen;
+  animation: hh-standby-glare 9s var(--hh-easing-standard) infinite alternate;
 }
-.hh-standby-depth[data-depth='2'] {
-  --drift: -1.4%, 0.9%;
-  opacity: 0.8;
-  animation-duration: 70s;
-}
-.hh-standby-depth[data-depth='3'] {
-  --drift: -2.8%, 1.6%;
-  animation-duration: 50s;
+.hh-standby-streak {
+  position: absolute;
+  top: 12%;
+  left: -12%;
+  width: 80%;
+  height: var(--hh-border-width-thick);
+  translate: 0 -50%;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--hh-strip) 75%, var(--standby-ink)) 32%, transparent 72%);
+  opacity: 0.5;
+  mix-blend-mode: screen;
 }
 
 /* Stage: the scope as a huge instrument floating in space, cropped by the frame. */
 .hh-standby-stage {
   position: absolute;
-  left: 62%;
-  top: 52%;
+  left: 64%;
+  top: 50%;
   width: var(--standby-scope);
   translate: -50% -50%;
   animation: hh-standby-focus 2.6s var(--hh-easing-enter) both;
@@ -475,11 +517,56 @@
 .hh-standby[data-size='full'] .hh-standby-ticks {
   stroke-width: 1.25;
 }
-.hh-standby[data-size='full'] :is(.hh-standby-globe, .hh-standby-ring) {
-  stroke-width: 1.5;
+/* The photographed Earth (NASA/NOAA Suomi NPP, Blue Marble 2012) at the scope's centre, lit from the sun's side, with
+   its atmosphere as a thin limb and a soft scatter, graded toward the phosphor like the sky. */
+.hh-standby-earth {
+  position: absolute;
+  inset: 33%;
+  border-radius: 50%;
+  background: url('./assets/standby/earth.webp') center / cover no-repeat;
+  filter: saturate(0.85) contrast(1.05);
+  box-shadow:
+    0 0 0 var(--hh-border-width-thin) color-mix(in srgb, var(--hh-info) 55%, var(--hh-strip)),
+    0 0 1.5rem 0.25rem color-mix(in srgb, color-mix(in srgb, var(--hh-info) 60%, var(--hh-strip)) 45%, transparent),
+    0 0 6rem 1rem color-mix(in srgb, var(--standby-ink) 14%, transparent);
 }
-.hh-standby[data-size='full'] .hh-standby-bands path {
-  stroke-width: 1;
+.hh-standby-earth::before,
+.hh-standby-earth::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+.hh-standby-earth::before {
+  background: radial-gradient(circle at 32% 30%, transparent 40%, color-mix(in srgb, black 50%, transparent) 64%, color-mix(in srgb, black 92%, transparent) 84%);
+}
+.hh-standby-earth::after {
+  background: var(--standby-ink);
+  mix-blend-mode: color;
+  opacity: 0.22;
+}
+.hh-standby[data-size='full'] .hh-standby-orbit[data-ring='1'] {
+  inset: 27%;
+}
+.hh-standby[data-size='full'] .hh-standby-orbit[data-ring='2'] {
+  inset: 18.5%;
+}
+.hh-standby[data-size='full'] .hh-standby-orbit[data-ring='3'] {
+  inset: 9%;
+}
+.hh-standby-credit {
+  position: absolute;
+  right: var(--hh-space-4);
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  height: var(--standby-bar);
+  margin: 0;
+  color: color-mix(in srgb, var(--hh-strip) 55%, black);
+  font-family: var(--hh-font-mono);
+  font-size: 0.6875rem;
+  animation: hh-standby-rise 0.9s var(--hh-easing-enter) 2s both;
 }
 .hh-standby-bearings text {
   fill: color-mix(in srgb, var(--standby-ink) 75%, transparent);
@@ -627,6 +714,13 @@
 }
 /* Phones: the scope rises clear of the title card, which drops its lead sentence (the readouts carry the state). */
 @media (max-width: 40rem) {
+  .hh-standby-credit {
+    left: var(--hh-space-4);
+    justify-content: flex-end;
+    font-size: 0.5625rem;
+    line-height: 1.3;
+    text-align: end;
+  }
   .hh-standby[data-size='full'] {
     --standby-scope: min(115vw, 58vh);
   }
@@ -666,6 +760,12 @@
 @keyframes hh-standby-camera {
   to {
     transform: scale(1.05) rotate(2deg) translate(-1%, 1%);
+  }
+}
+@keyframes hh-standby-glare {
+  to {
+    opacity: 0.75;
+    scale: 0.95;
   }
 }
 @keyframes hh-standby-parallax {

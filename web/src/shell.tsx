@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Agents } from "./agents/Agents.tsx";
 import { RoundDetailPage } from "./detail/RoundDetail.tsx";
 import { Feed } from "./feed/Feed.tsx";
-import { hhmm } from "./format.ts";
+import { hhmm, plural } from "./format.ts";
 import { Icon, type IconName } from "./icons.tsx";
 import { isTextField, KeyMapDialog, showKeyMap } from "./keys.tsx";
 import { Log } from "./log/Log.tsx";
@@ -103,6 +103,7 @@ const NAV_KEY = "hermes-hub.nav";
 export function App() {
   const route = parseRoute(usePath());
   const pending = useStore((s) => s.rounds.filter((r) => r.status === "pending").length);
+  const inFeed = useStore((s) => s.rounds.length);
   const agents = useStore((s) => s.agents.length);
   const theme = useStore((s) => s.settings.theme);
   const palette = useStore((s) => s.settings.palette);
@@ -181,6 +182,11 @@ export function App() {
         <span className="hh-live-value" data-live={pending > 0 ? "true" : undefined}>
           Pending · {pending}
         </span>
+        {route.name === "feed" ? (
+          <span className="hh-mono-sm hh-app-bar-stat">
+            {plural(inFeed, "Round")} in the Feed · arrival order
+          </span>
+        ) : null}
         <span className="hh-app-bar-spacer"></span>
         <ConnectionValue />
         <span className="hh-tooltip-anchor">

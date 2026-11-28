@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { FeedRoundView } from "../../../src/hub/engine.ts";
 import type { Answer } from "../../../src/schema/types.ts";
-import { countdown, hhmm, LOCK_SOON_MS, nextDeadline, OUTCOME_WORDS, plural, projectLabel } from "../format.ts";
+import { countdown, hhmm, LOCK_SOON_MS, nextDeadline, OUTCOME_WORDS, projectLabel } from "../format.ts";
 import { Icon } from "../icons.tsx";
 import { clearJump, reconnectNow, useNow, useStore } from "../store.ts";
 import { isTextField, KeyList } from "../keys.tsx";
@@ -272,9 +272,6 @@ export function Feed() {
         <h1 className="hh-heading-lg" id="feed-h" tabIndex={-1}>
           Feed
         </h1>
-        <span className="hh-mono-sm">
-          {plural(rounds.length, "Round")} in the Feed · {pendingCount} pending · arrival order
-        </span>
       </div>
       <ConnectionAlert />
       {!loaded ? (

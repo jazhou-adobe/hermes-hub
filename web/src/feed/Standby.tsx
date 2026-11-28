@@ -54,13 +54,17 @@ function stars(seed: number, count: number, w: number, h: number, size: [number,
 
 /** Stars inside the chart's -100..100 space. */
 const CHART_STARS = stars(11, 24, 200, 200, [0.4, 0.9]).map(([x, y, r, t]): Star => [x - 100, y - 100, r, t]);
-/** The open sky behind the full scene, three depths drifting at their own pace (1600 × 1000, sliced to fit). */
-const SKY: Star[][] = [stars(3, 140, 1600, 1000, [0.5, 1]), stars(5, 60, 1600, 1000, [0.9, 1.6]), stars(9, 16, 1600, 1000, [1.6, 2.4])];
+/** Bright glints over the sky photo, twinkling and drifting on their own depth (1600 × 1000, sliced to fit). */
+const GLINTS = stars(9, 18, 1600, 1000, [1.4, 2.4]);
+
+/** Orbit track radii in the chart's units: around the drawn planet (compact) or the photographed Earth (full). */
+const TRACKS = { compact: [34, 56, 78], full: [46, 63, 82] };
 
 /** Bearing ticks round the bezel: a long one every 30°, a short one every 10°. */
 const TICKS = Array.from({ length: 36 }, (_, i) => i * 10);
 
 function Scope({ craft, full }: { craft: Craft[]; full: boolean }) {
+  const tracks = TRACKS[full ? "full" : "compact"];
   return (
     <div className="hh-standby-scope" aria-hidden="true">
       <div className="hh-standby-well">
@@ -69,9 +73,9 @@ function Scope({ craft, full }: { craft: Craft[]; full: boolean }) {
             <circle key={i} className="hh-standby-star" data-twinkle={twinkle || undefined} cx={x} cy={y} r={r} />
           ))}
           <g className="hh-standby-grid">
-            <circle className="hh-standby-track" r="34" />
-            <circle className="hh-standby-track" r="56" />
-            <circle className="hh-standby-track" r="78" />
+            {tracks.map((r) => (
+              <circle key={r} className="hh-standby-track" r={r} />
+            ))}
             <circle r="92" />
             <line x1="-92" y1="0" x2="92" y2="0" />
             <line x1="0" y1="-92" x2="0" y2="92" />
@@ -93,22 +97,18 @@ function Scope({ craft, full }: { craft: Craft[]; full: boolean }) {
               })}
             </g>
           ) : null}
-          <g className="hh-standby-planet">
-            <circle className="hh-standby-atmosphere" r="19" />
-            <ellipse className="hh-standby-ring" data-half="back" rx="25" ry="6.5" transform="rotate(-18)" />
-            <circle className="hh-standby-globe" r="14" />
-            {full ? (
-              <g className="hh-standby-bands">
-                <path d="M -13.2 -4.5 Q 0 -2 13.2 -4.5" />
-                <path d="M -14 1 Q 0 3.5 14 1" />
-                <path d="M -11.5 7.5 Q 0 9.5 11.5 7.5" />
-              </g>
-            ) : null}
-            <path d="M 0 -14 A 14 14 0 0 1 0 14 A 6 14 0 0 1 0 -14 Z" className="hh-standby-terminator" />
-            <path className="hh-standby-ring" d="M -23.8 7.7 A 25 6.5 -18 0 0 23.8 -7.7" />
-          </g>
+          {full ? null : (
+            <g className="hh-standby-planet">
+              <circle className="hh-standby-atmosphere" r="19" />
+              <ellipse className="hh-standby-ring" data-half="back" rx="25" ry="6.5" transform="rotate(-18)" />
+              <circle className="hh-standby-globe" r="14" />
+              <path d="M 0 -14 A 14 14 0 0 1 0 14 A 6 14 0 0 1 0 -14 Z" className="hh-standby-terminator" />
+              <path className="hh-standby-ring" d="M -23.8 7.7 A 25 6.5 -18 0 0 23.8 -7.7" />
+            </g>
+          )}
         </svg>
         <span className="hh-standby-sweep"></span>
+        {full ? <span className="hh-standby-earth"></span> : null}
         <span className="hh-standby-sky">
           <span className="hh-standby-meteor"></span>
         </span>
@@ -136,17 +136,18 @@ function Scope({ craft, full }: { craft: Craft[]; full: boolean }) {
   );
 }
 
-/** The open sky of the full scene: three star depths over a faint nebula. */
+/** The open sky of the full scene: the Milky Way photograph, a sun glare with its streak, and drifting glints. */
 function Space() {
   return (
     <div className="hh-standby-space" aria-hidden="true">
-      {SKY.map((layer, depth) => (
-        <svg key={depth} className="hh-standby-depth" data-depth={depth + 1} viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" focusable="false">
-          {layer.map(([x, y, r, twinkle], i) => (
-            <circle key={i} className="hh-standby-star" data-twinkle={twinkle || undefined} cx={x} cy={y} r={r} />
-          ))}
-        </svg>
-      ))}
+      <span className="hh-standby-photo"></span>
+      <svg className="hh-standby-glints" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" focusable="false">
+        {GLINTS.map(([x, y, r, twinkle], i) => (
+          <circle key={i} className="hh-standby-star" data-twinkle={twinkle || undefined} cx={x} cy={y} r={r} />
+        ))}
+      </svg>
+      <span className="hh-standby-sun"></span>
+      <span className="hh-standby-streak"></span>
     </div>
   );
 }
@@ -239,6 +240,7 @@ export function Standby({ compact }: { compact: boolean }) {
       </div>
       <span className="hh-standby-letterbox" data-edge="top" aria-hidden="true"></span>
       <span className="hh-standby-letterbox" data-edge="bottom" aria-hidden="true"></span>
+      <p className="hh-standby-credit">Earth: NASA/NOAA Suomi NPP · Milky Way: ESO/S. Brunier, CC BY 4.0</p>
       <div className="hh-standby-caption">
         <div className="hh-standby-copy">
           <h2 className="hh-standby-title" id="standby-h">
