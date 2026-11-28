@@ -117,9 +117,17 @@ _Avoid_: online, offline, connected
 ### Design review
 
 **Design Review**:
-One Agent's request for the Human to judge HTML designs (approve or reject, pick a variant, comment, score), carried through successive Revisions until the Human approves or stops it.
+The Human's judgment of HTML designs (approve or reject, pick a variant, comment, score) for one or more Agent sessions, carried through successive Revisions; it holds the comment threads, which carry forward from one Revision to the next.
 _Avoid_: review (alone), proof, board, mockup
 
 **Revision**:
-One submitted version of a Design Review's content; the Human sends feedback and verdicts on each Revision once, and comments carry forward to the next.
+One submitted version of a Design Review's content, sent to the Hub as a Round carrying exactly one Design Question; a Design Review has at most one Pending Revision, and the Human sends feedback and verdicts on each Revision once.
 _Avoid_: version, iteration, draft
+
+**Design Question**:
+The Question in a Revision's Round that carries the designs to judge; it only ever waits for the Human, never Locks by policy, and may sit alongside ordinary Questions.
+_Avoid_: review question, design attachment
+
+**In review / Open / Approved / Rejected / Closed**:
+A Design Review's status: In review while a Revision is Pending; Open when none is Pending and it has not ended; Approved or Rejected by the Human's overall verdict; Closed when the Human or an Agent ends it without a verdict. A later Revision reopens an Approved, Rejected or Closed Design Review.
+_Avoid_: done, finished, accepted
