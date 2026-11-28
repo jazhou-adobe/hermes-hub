@@ -32,7 +32,6 @@ Known gaps left by the 2026-11-27 changes (remote access, Standby, side nav). No
 | Item | Spec |
 |---|---|
 | Settings doesn't show `host` or whether a remote password is set; only `hermes-hub config` does. | [hub-operations](hub-operations.md), [security](security.md) |
-| `Hermes Hub.app` can't sign in to a Hub on another Mac: it has no Basic auth prompt (`WKNavigationDelegate` auth challenge). | [macos-app](macos-app.md) |
 | Remote sign-in has no lockout or rate limit; each wrong guess costs one argon2 verification. | [security](security.md) |
 | No TLS: on a LAN the password and every Round travel in clear text. Tailscale encrypts; Tailscale Serve (HTTPS) would also give remote devices a secure context for browser notifications. | [security](security.md) |
 | The browser guard refuses host names other than this Mac's own, so Tailscale MagicDNS names don't work; use the `100.x` address. | [security](security.md) |

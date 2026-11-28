@@ -42,6 +42,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
   var webView: WKWebView!
   var hubURL = savedHubURL()
   var titleObservation: NSKeyValueObservation?
+  /// Challenges waiting on the one sign-in sheet: the page and its assets and streams all ask at once.
+  var pendingAuth: [(URLSession.AuthChallengeDisposition, URLCredential?) -> Void] = []
 
   func applicationDidFinishLaunching(_ note: Notification) {
     buildMenu()
@@ -97,6 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     appMenu.addItem(withTitle: "About Hermes Hub", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
     appMenu.addItem(.separator())
     appMenu.addItem(withTitle: "Hub URL…", action: #selector(changeHubURL), keyEquivalent: ",")
+    appMenu.addItem(withTitle: "Forget Saved Password", action: #selector(forgetPassword), keyEquivalent: "")
     appMenu.addItem(.separator())
     appMenu.addItem(withTitle: "Hide Hermes Hub", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
     let others = appMenu.addItem(withTitle: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
@@ -164,7 +167,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
   @objc func changeHubURL() {
     let alert = NSAlert()
     alert.messageText = "Hub URL"
-    alert.informativeText = "The Command Center this window shows, for example \(defaultHubURL). The Hub accepts only 127.0.0.1 and localhost."
+    alert.informativeText = "The Command Center this window shows, for example \(defaultHubURL). A Hub on another Mac asks for its remote username and password (set there with hermes-hub password)."
     let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
     field.stringValue = hubURL.absoluteString
     alert.accessoryView = field
@@ -242,6 +245,94 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
       </main></body></html>
       """
     webView.loadHTMLString(html, baseURL: nil)
+  }
+
+  // MARK: Remote sign-in (security spec: Basic auth for any device but the Hub's own Mac)
+
+  /// The Hub's protection space; Basic auth for any other origin goes to WebKit's default handling.
+  func hubSpace(_ space: URLProtectionSpace) -> Bool {
+    space.authenticationMethod == NSURLAuthenticationMethodHTTPBasic
+      && space.host.lowercased() == hubURL.host?.lowercased()
+      && space.port == (hubURL.port ?? (hubURL.scheme == "https" ? 443 : 80))
+  }
+
+  func webView(_ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge,
+               completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+    let space = challenge.protectionSpace
+    guard hubSpace(space) else { return completionHandler(.performDefaultHandling, nil) }
+    let storage = URLCredentialStorage.shared
+    // WebKit can report a failure before any password was tried; only a refused password counts.
+    let proposed = challenge.proposedCredential
+    let failed = challenge.previousFailureCount > 0 && proposed?.hasPassword == true
+    let saved = storage.defaultCredential(for: space)
+    if !failed, let saved { return completionHandler(.useCredential, saved) }
+    // A saved password the Hub refused is stale: drop it so the sheet asks again.
+    if failed, let saved, saved.user == proposed?.user, saved.password == proposed?.password {
+      storage.remove(saved, for: space)
+    }
+    pendingAuth.append(completionHandler)
+    if pendingAuth.count > 1 { return } // the sheet is already up; this one waits for its answer
+    let answer = askForPassword(space: space, failed: failed, user: proposed?.user)
+    let waiting = pendingAuth
+    pendingAuth = []
+    guard let (credential, remember) = answer else {
+      waiting.forEach { $0(.cancelAuthenticationChallenge, nil) }
+      showSignInCancelled()
+      return
+    }
+    if remember { storage.setDefaultCredential(credential, for: space) }
+    waiting.forEach { $0(.useCredential, credential) }
+  }
+
+  /// The sign-in sheet: username, password and "Remember in Keychain". Nil when cancelled.
+  func askForPassword(space: URLProtectionSpace, failed: Bool, user: String?) -> (URLCredential, Bool)? {
+    let alert = NSAlert()
+    alert.messageText = failed ? "Wrong username or password" : "Sign in to the Hub"
+    alert.informativeText = "\(hubURL.absoluteString) needs its remote username and password (set on that Mac with hermes-hub password)."
+    let userField = NSTextField(frame: NSRect(x: 0, y: 56, width: 300, height: 24))
+    userField.placeholderString = "Username"
+    userField.stringValue = user ?? "hermes"
+    let passField = NSSecureTextField(frame: NSRect(x: 0, y: 28, width: 300, height: 24))
+    passField.placeholderString = "Password"
+    let remember = NSButton(checkboxWithTitle: "Remember in Keychain", target: nil, action: nil)
+    remember.frame = NSRect(x: 0, y: 0, width: 300, height: 20)
+    remember.state = .on
+    let box = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 80))
+    [userField, passField, remember].forEach(box.addSubview)
+    alert.accessoryView = box
+    alert.addButton(withTitle: "Sign In")
+    alert.addButton(withTitle: "Cancel")
+    alert.window.initialFirstResponder = passField
+    guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+    let persistence: URLCredential.Persistence = remember.state == .on ? .permanent : .forSession
+    return (URLCredential(user: userField.stringValue, password: passField.stringValue, persistence: persistence), remember.state == .on)
+  }
+
+  func showSignInCancelled() {
+    let url = escapeHTML(hubURL.absoluteString)
+    let html = """
+      <!doctype html><html><head><meta charset="utf-8"><title>Hermes Hub</title><style>
+      :root { color-scheme: light dark; font: 15px -apple-system, system-ui, sans-serif; }
+      body { display: grid; place-items: center; min-height: 90vh; margin: 0; }
+      main { max-width: 34rem; padding: 2rem; } h1 { font-size: 1.3rem; margin: 0 0 .5rem; }
+      code { font: 13px ui-monospace, monospace; } p { line-height: 1.5; }
+      a { display: inline-block; margin: .5rem 1rem 0 0; color: #d9773a; font-weight: 600; }
+      </style></head><body><main>
+      <h1>Not signed in</h1>
+      <p>The Hub at <code>\(url)</code> needs its remote username and password. Set them on that Mac with <code>hermes-hub password</code>.</p>
+      <a href="\(appScheme)://retry">Sign In</a><a href="\(appScheme)://settings">Change Hub URL…</a>
+      </main></body></html>
+      """
+    webView.loadHTMLString(html, baseURL: nil)
+  }
+
+  /// Removes every saved password for the current Hub's host and port, then reloads (which asks again if needed).
+  @objc func forgetPassword() {
+    let storage = URLCredentialStorage.shared
+    for (space, credentials) in storage.allCredentials where hubSpace(space) {
+      for credential in credentials.values { storage.remove(credential, for: space) }
+    }
+    load()
   }
 
   // MARK: Page UI
