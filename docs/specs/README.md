@@ -7,7 +7,7 @@ These are the confirmed specs for Hermes Hub Phase 1. Each was decided with the 
 | [round-schema.md](round-schema.md) (+ [`round.schema.json`](round.schema.json), [`examples/`](examples/)) | What an Agent sends (Round, Question kinds, Attachments, Unanswered Policy) and gets back (Answer, Outcome, `set_by`, `suggested_by`) | [#6](https://github.com/jazhou-adobe/hermes-hub/issues/6) |
 | [round-lifecycle.md](round-lifecycle.md) | States, per-Question Lock, strict deadlines, Drafts, supersede, delivery, liveness, idempotency, flood cap | [#7](https://github.com/jazhou-adobe/hermes-hub/issues/7) |
 | [transports.md](transports.md) | One Round engine; HTTP API, MCP (shim and `/mcp`, Tasks), CLI, errors and exit codes | [#8](https://github.com/jazhou-adobe/hermes-hub/issues/8) |
-| [security.md](security.md) | Local only, session tokens as identity, browser guard, accepted limits | [#9](https://github.com/jazhou-adobe/hermes-hub/issues/9) |
+| [security.md](security.md) | Network access behind Basic auth (amended 2026-11-27; this Mac needs none), session tokens as identity, browser guard, accepted limits | [#9](https://github.com/jazhou-adobe/hermes-hub/issues/9) |
 | [agent-identity.md](agent-identity.md) | Agent session, detection precedence, callsigns, `POST /v1/sessions`, discovery | [#10](https://github.com/jazhou-adobe/hermes-hub/issues/10) |
 | [delegation.md](delegation.md) | Advisors, Suggestions, auto-ask rules | [#11](https://github.com/jazhou-adobe/hermes-hub/issues/11) |
 | [command-center.md](command-center.md) | The Feed, answering, keys, notifications, live updates | [#12](https://github.com/jazhou-adobe/hermes-hub/issues/12) |
@@ -24,3 +24,18 @@ These are the confirmed specs for Hermes Hub Phase 1. Each was decided with the 
 - [Research notes](../research/README.md).
 - The throwaway Command Center prototype on branch [`prototype/command-center`](https://github.com/jazhou-adobe/hermes-hub/tree/prototype/command-center/prototype/command-center).
 - The Flight Director design in [`jazhou-adobe/apollo-tokens`, `brands/hermes/design`](https://github.com/jazhou-adobe/apollo-tokens/tree/0b316ce29a5f18e14ddae1cfc4b2639a466ca9a1/brands/hermes/design) @ `0b316ce`, together with its [additions brief](https://github.com/jazhou-adobe/apollo-tokens/blob/0b316ce29a5f18e14ddae1cfc4b2639a466ca9a1/brands/hermes/design/briefs/command-center-additions.md).
+
+## Open items
+
+Known gaps left by the 2026-11-27 changes (remote access, Standby, side nav). None blocks use; each names the spec it belongs to.
+
+| Item | Spec |
+|---|---|
+| Settings doesn't show `host` or whether a remote password is set; only `hermes-hub config` does. | [hub-operations](hub-operations.md), [security](security.md) |
+| `Hermes Hub.app` can't sign in to a Hub on another Mac: it has no Basic auth prompt (`WKNavigationDelegate` auth challenge). | [macos-app](macos-app.md) |
+| Remote sign-in has no lockout or rate limit; each wrong guess costs one argon2 verification. | [security](security.md) |
+| No TLS: on a LAN the password and every Round travel in clear text. Tailscale encrypts; Tailscale Serve (HTTPS) would also give remote devices a secure context for browser notifications. | [security](security.md) |
+| The browser guard refuses host names other than this Mac's own, so Tailscale MagicDNS names don't work; use the `100.x` address. | [security](security.md) |
+| `host` takes only `0.0.0.0` or `127.0.0.1`, because local tools reach the Hub at `127.0.0.1`; binding to one interface (the tailnet only) isn't possible. | [security](security.md) |
+| `hermes-hub password` was checked with piped input and once at a terminal by the Human; there's no automated test of the hidden prompt. | [security](security.md) |
+| Standby: the full scene leaves at once when a Round arrives (no exit transition), and on very short viewports the title card can overlap the side nav. | [command-center](command-center.md) |
